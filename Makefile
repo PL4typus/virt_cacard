@@ -16,4 +16,4 @@ cacard_tinker: $(OBJ)
 .PHONY: clean
 
 clean:
-	rm -f $(ODIR)/*.o *~ core 
+	rm -rf $(ODIR)/*.o *~ core db/ tokens/
