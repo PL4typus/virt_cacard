@@ -10,10 +10,17 @@ OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 $(ODIR)/%.o: %.c
 	$(CC) -c -g -o $@ $< $(CFLAGS)
 
-cacard_tinker: $(OBJ)
+cacard_tinker.out: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+
+softhsm: 
+	rm -rf db/ tokens/
+	./setup-softhsm2.sh
+
+all: 	clean cacard_tinker.out softhsm
+
 
 .PHONY: clean
 
 clean:
-	rm -rf $(ODIR)/*.o *~ core db/ tokens/
+	rm -rf $(ODIR)/*.o *~ core db/ tokens/ *.out

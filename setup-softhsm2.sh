@@ -88,6 +88,7 @@ fi
 # NSS DB
 if [ ! -d "$NSSDB" ]; then
 	mkdir "$NSSDB"
-	modutil -create -dbdir "sql:$NSSDB" -force
-	modutil -add "SoftHSM PKCS#11" -dbdir "sql:$NSSDB" -libfile "$P11LIB" -force
+        modutil -create -dbdir "sql:$NSSDB" -force
+# Skipping that line thanks to last NSS changes
+#	modutil -add "SoftHSM PKCS#11" -dbdir "sql:$NSSDB" -libfile "$P11LIB" -force
 fi
