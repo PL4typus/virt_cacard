@@ -7,7 +7,7 @@
 #include <libcacard.h>
 #include <glib.h>
 
-#define ARGS "db=\"sql:%s\" use_hw=no soft=(,Test,CAC,,cert1,cert2,cert3)"
+#define ARGS "db=\"sql:%s\" use_hw=removable soft=(,Test,CAC,,cert1,cert2,cert3)"
 
 static GMainLoop *loop;
 static GThread *thread;
@@ -42,6 +42,7 @@ static gpointer events_thread(gpointer data)
     {
       case VEVENT_READER_INSERT:
         printf("reader insert");
+
       case VEVENT_READER_REMOVE:
         printf("reader remove");
       case VEVENT_CARD_INSERT:
@@ -64,14 +65,13 @@ static gpointer events_thread(gpointer data)
 int main(int argc, char* argv[])
 {
   // GIOChannel *channel;
-  char *vpcd_host;
-  char *vpcd_port;
-  char* dbdir = g_build_filename("db",NULL);
+  char *dbdir = g_build_filename("db",NULL);
   char *args = g_strdup_printf(ARGS,dbdir);
   VCardEmulOptions *command_line_options = NULL;
   VCardEmulError ret;
 
 
+  printf("Start Main loop \n");
   loop = g_main_loop_new(NULL, TRUE);
   /* TODO
    * 
@@ -79,15 +79,20 @@ int main(int argc, char* argv[])
    *
    * */
   // Start the event thread
+  printf("Start event thread \n");
   thread = g_thread_new("tinker/events", events_thread, NULL);
 
+  printf(" Init card \n");
   command_line_options = vcard_emul_options(args);
   ret = vcard_emul_init(command_line_options);
   if(ret != VCARD_EMUL_OK){
+    printf("Failed to init card\n");
+    g_main_loop_unref(loop);
     return EXIT_FAILURE;
   }
   else{
     printf("Init ok with options \"%s\"\n", args);
   }
+  g_main_loop_unref(loop);
   return EXIT_SUCCESS;
 }
