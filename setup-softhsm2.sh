@@ -37,7 +37,6 @@ generate_cert() {
 	# Write certificate
 	pkcs11-tool --write-object "$TYPE.cert.der" --type=cert --id=$ID \
 		--label="$LABEL" --module="$P11LIB"
-
 	rm "$TYPE.cert" "$TYPE.cert.der"
 
 	p11tool --login --provider="$P11LIB" --list-all

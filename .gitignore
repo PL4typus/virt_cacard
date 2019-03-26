@@ -42,6 +42,7 @@ obj/*
 *.su
 *.idb
 *.pdb
+*.log
 
 # Kernel Module Compile Results
 *.mod*
@@ -58,4 +59,5 @@ db/*
 
 # vim turds
 *.swp
+.*.swp
 *~
