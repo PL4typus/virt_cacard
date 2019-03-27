@@ -6,9 +6,8 @@
 #include <glib.h>
 #include <libcacard.h>
 
-#include "libopensc/opensc.h"
-#include "../sc-test.h"
 #include "connection.h"
+#include "glib-compat.h"
 
 #define ARGS "db=\"sql:%s\" use_hw=removable" //no need for soft options with use_hw=removable
 #define APDUBufSize 270
@@ -21,9 +20,6 @@ static guint nreaders;
 static GMutex mutex;
 static GCond cond;
 static const char hostname[] = "/dev/null";
-
-sc_card_t *card;
-sc_context_t *ctx;
 
 static gpointer events_thread(gpointer data)
 {
@@ -69,26 +65,6 @@ static gpointer events_thread(gpointer data)
     return NULL;
 }
 
-static int test_list(void)
-{
-    VReaderList *list = vreader_get_reader_list();
-    VReaderListEntry *reader_entry;
-    int cards = 0;
-
-    for (reader_entry = vreader_list_get_first(list); reader_entry;
-            reader_entry = vreader_list_get_next(reader_entry)) {
-        VReader *r = vreader_list_get_reader(reader_entry);
-        vreader_id_t id;
-        id = vreader_get_id(r);
-        printf("Readers: %s\tid:%d\n",vreader_get_name(r),id);
-        if (vreader_card_is_present(r) == VREADER_OK) {
-            cards++;
-        }
-        vreader_free(r);
-    }
-    vreader_list_delete(list);
-    return cards;
-}
 
 static VCardEmulError init_cacard(void)
 {
@@ -138,7 +114,76 @@ static unsigned int get_id_from_string(char *string, unsigned int default_id)
     return id;
 }
 
-   
+static GIOChannel *channel_socket;
+static GByteArray *socket_to_send;
+static CompatGMutex socket_to_send_lock;
+static guint socket_tag;
+
+static void
+update_socket_watch(void);
+
+static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpointer data)
+{
+    gsize bw;
+    GError *err = NULL;
+
+    g_return_val_if_fail(socket_to_send->len != 0, FALSE);
+    g_return_val_if_fail(condition & G_IO_OUT, FALSE);
+
+    g_io_channel_write_chars(channel_socket,
+        (gchar *)socket_to_send->data, socket_to_send->len, &bw, &err);
+    if (err != NULL) {
+        g_error("Error while sending socket %s", err->message);
+        return FALSE;
+    }
+    g_byte_array_remove_range(socket_to_send, 0, bw);
+
+    if (socket_to_send->len == 0) {
+        update_socket_watch();
+        return FALSE;
+    }
+    return TRUE;
+}
+
+static gboolean socket_prepare_sending(gpointer user_data)
+{
+    update_socket_watch();
+
+    return FALSE;
+}
+
+static gboolean do_socket(GIOChannel *source,
+          GIOCondition condition,
+          gpointer data)
+{
+    /* not sure if two watches work well with a single win32 sources */
+    if (condition & G_IO_OUT) {
+        if (!do_socket_send(source, condition, data)) {
+            return FALSE;
+        }
+    }
+
+    if (condition & G_IO_IN) {
+        if (!do_socket_read(source, condition, data)) {
+            return FALSE;
+        }
+    }
+
+    return TRUE;
+}
+
+static void update_socket_watch(void)
+{
+    gboolean out = socket_to_send->len > 0;
+
+    if (socket_tag != 0) {
+        g_source_remove(socket_tag);
+    }
+
+    socket_tag = g_io_add_watch(channel_socket,
+        G_IO_IN | (out ? G_IO_OUT : 0), do_socket, NULL);
+}
+
 static gboolean do_command(GIOChannel *source, GIOCondition condition, gpointer data)
 {
     char *string;
@@ -274,8 +319,7 @@ int main(int argc, char* argv[])
 {
     VReader *r;
     VCardEmulError ret;
-    int cards,code;
-    GIOChannel *channel_socket;
+    int code = 0;
     SOCKET sock;
     uint16_t port = VPCDPORT;
 
@@ -285,24 +329,16 @@ int main(int argc, char* argv[])
  **/
     ret = init_cacard();
     if(ret != VCARD_EMUL_OK) return EXIT_FAILURE;
-    //Transfer a few bytes to the card
-    if(!transfer_test()){
-        printf("Failed transfer\n");
-    }
-//    sock = connectsock(hostname,port);
-//    
-//    channel_socket = g_io_channel_unix_new(sock);
-//    g_io_channel_set_encoding(channel_socket, NULL, NULL);
-//    /* we buffer ourself for thread safety reasons */
-//    g_io_channel_set_buffered(channel_socket, FALSE);
 
+    sock = connectsock(hostname,port);
+    channel_socket = g_io_channel_unix_new(sock);
+    g_io_channel_set_encoding(channel_socket, NULL, NULL);
+    /* we buffer ourself for thread safety reasons */
+    g_io_channel_set_buffered(channel_socket, FALSE);
 
 /**
- **************** OPENSC PART ******************
+ **************** Clean up  ******************
  **/
-
-    code = sc_test_init(&argc,argv);
-    // Start of the cleaning up part
     r = vreader_get_reader_by_id(0);
     
     /* This probably supposed to be a event that terminates the loop */
@@ -313,8 +349,6 @@ int main(int argc, char* argv[])
 
     /* Clean up */
     vreader_free(r);
-//    close(card_sock);
-//    close(app_sock);
 
     g_main_loop_unref(loop);
     return code;
