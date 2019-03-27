@@ -1,12 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <unistd.h>
-#include <libcacard.h>
-#include <glib.h>
 
+#include <glib.h>
+#include <libcacard.h>
+
+#include "libopensc/opensc.h"
+#include "../sc-test.h"
+#include "connection.h"
 
 #define ARGS "db=\"sql:%s\" use_hw=removable" //no need for soft options with use_hw=removable
 #define APDUBufSize 270
@@ -18,7 +20,10 @@ static GThread *thread;
 static guint nreaders;
 static GMutex mutex;
 static GCond cond;
+static const char hostname[] = "/dev/null";
 
+sc_card_t *card;
+sc_context_t *ctx;
 
 static gpointer events_thread(gpointer data)
 {
@@ -62,29 +67,6 @@ static gpointer events_thread(gpointer data)
     }
 
     return NULL;
-}
-
-
-static gboolean transfer_test(void){
-    VReader *reader = vreader_get_reader_by_id(0);
-
-    VReaderStatus status;
-    int RecvLength = APDUBufSize; 
-    uint8_t RecvBuffer[APDUBufSize];
-    uint8_t SendBuffer[] = {
-        /* Select Applet that is not there */
-        0x00, 0xa4, 0x04, 0x00, 0x07, 0x62, 0x76, 0x01, 0xff, 0x00, 0x00, 0x00,
-    };
-
-    if(reader != NULL){
-        status = vreader_xfr_bytes(reader,
-                SendBuffer, sizeof(SendBuffer),
-                RecvBuffer, &RecvLength);
-        vreader_free(reader); /* get by id ref */
-
-        if(status == VREADER_OK) return TRUE;
-    }
-    return FALSE;
 }
 
 static int test_list(void)
@@ -156,7 +138,7 @@ static unsigned int get_id_from_string(char *string, unsigned int default_id)
     return id;
 }
 
-    
+   
 static gboolean do_command(GIOChannel *source, GIOCondition condition, gpointer data)
 {
     char *string;
@@ -287,33 +269,39 @@ static gboolean do_command(GIOChannel *source, GIOCondition condition, gpointer 
     return TRUE;
 }
 
+
 int main(int argc, char* argv[])
 {
     VReader *r;
     VCardEmulError ret;
-    int cards;
-    GIOChannel *channel_stdin;
+    int cards,code;
+    GIOChannel *channel_socket;
+    SOCKET sock;
+    uint16_t port = VPCDPORT;
 
     loop = g_main_loop_new(NULL, TRUE);
-    //Initialize card with the correct set of options
+/**
+ **************** vCAC INIT *******************
+ **/
     ret = init_cacard();
     if(ret != VCARD_EMUL_OK) return EXIT_FAILURE;
-    //Test if we can get a list of readers, prints their names, id and number of connected cards
-    cards = test_list();
-    printf("# of cards: %i\n",cards);
-
     //Transfer a few bytes to the card
     if(!transfer_test()){
         printf("Failed transfer\n");
     }
-    printf("> ");
-    fflush(stdout);
+//    sock = connectsock(hostname,port);
+//    
+//    channel_socket = g_io_channel_unix_new(sock);
+//    g_io_channel_set_encoding(channel_socket, NULL, NULL);
+//    /* we buffer ourself for thread safety reasons */
+//    g_io_channel_set_buffered(channel_socket, FALSE);
 
-    channel_stdin = g_io_channel_unix_new(STDIN_FILENO);
-    g_io_add_watch(channel_stdin, G_IO_IN, do_command, NULL);
-    g_main_loop_run(loop);
 
-    g_io_channel_unref(channel_stdin);
+/**
+ **************** OPENSC PART ******************
+ **/
+
+    code = sc_test_init(&argc,argv);
     // Start of the cleaning up part
     r = vreader_get_reader_by_id(0);
     
@@ -325,11 +313,11 @@ int main(int argc, char* argv[])
 
     /* Clean up */
     vreader_free(r);
+//    close(card_sock);
+//    close(app_sock);
 
     g_main_loop_unref(loop);
-    return EXIT_SUCCESS;
+    return code;
 }
-
-
 
 /* vim: set ts=4 sw=4 tw=0 noet expandtab: */
