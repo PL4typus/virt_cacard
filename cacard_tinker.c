@@ -1,3 +1,26 @@
+/*
+ * cacard_tinker.c A program making use of libcacard and vpcd
+ * to present a virtual CACard through PC/SC API
+ *
+ * Copyright (C) 2019 Red Hat
+ *
+ * Author(s): Pierre-Louis Palant <ppalant@redhat.com>
+ *
+ * This work is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This work is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this work; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +39,7 @@
 #define VPCD_CTRL_RESET 2
 #define VPCD_CTRL_ATR	4
 #define APDUBufSize 270
+#define MAX_ATR_LEN 40
 #define PIN 77777777
 
 
@@ -149,6 +173,19 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
     return TRUE;
 }
 
+static char* reader_name = "SoftHSM slot ID 0x4590c6e6";
+
+void atr_reply(){
+    VReader *r = vreader_get_reader_by_name(reader_name);
+    uint8_t atr[MAX_ATR_LEN];
+    int atr_length = MAX_ATR_LEN;
+    vreader_power_on(r, atr, &atr_length);
+    for(int i = 0; i < atr_length; i++){
+        printf("%x ",atr[i]);
+    }
+    printf("\n");
+}
+
 static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpointer data)
 {
     //TODO: socket read
@@ -206,6 +243,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
             case VPCD_CTRL_ATR:
                 //TODO ATR
                 printf("ATR requested by vpcd\n");
+                atr_reply();
                 break;
             default:
                 printf("Non recognized code\n");
@@ -216,6 +254,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     }
     return TRUE;
 }
+
 
 static gboolean socket_prepare_sending(gpointer user_data)
 {
@@ -252,136 +291,6 @@ static void update_socket_watch(void)
 
     socket_tag = g_io_add_watch(channel_socket,
             G_IO_IN | (out ? G_IO_OUT : 0), do_socket, NULL);
-}
-
-static gboolean do_command(GIOChannel *source, GIOCondition condition, gpointer data)
-{
-    char *string;
-    VCardEmulError error;
-    static unsigned int default_reader_id;
-    unsigned int reader_id;
-    VReader *reader = NULL;
-    GError *err = NULL;
-
-    g_assert(condition & G_IO_IN);
-
-    reader_id = default_reader_id;
-    g_io_channel_read_line(source, &string, NULL, NULL, &err);
-    if (err != NULL) {
-        g_error("Error while reading command: %s", err->message);
-    }
-
-    if (string != NULL) {
-        if (strncmp(string, "exit", 4) == 0) {
-            /* remove all the readers */
-            VReaderList *list = vreader_get_reader_list();
-            VReaderListEntry *reader_entry;
-            printf("Active Readers:\n");
-            for (reader_entry = vreader_list_get_first(list); reader_entry;
-                    reader_entry = vreader_list_get_next(reader_entry)) {
-                VReader *r = vreader_list_get_reader(reader_entry);
-                vreader_id_t id;
-                id = vreader_get_id(r);
-                if (id == (vreader_id_t)-1) {
-                    continue;
-                }
-                /* be nice and signal card removal first (qemu probably should
-                 * do this itself) */
-                if (vreader_card_is_present(r) == VREADER_OK) {
-                    //TODO remove card
-                }
-                // TODO Remove reader
-            }
-            exit(0);
-        } else if (strncmp(string, "insert", 6) == 0) {
-            if (string[6] == ' ') {
-                reader_id = get_id_from_string(&string[7], reader_id);
-            }
-            reader = vreader_get_reader_by_id(reader_id);
-            if (reader != NULL) {
-                error = vcard_emul_force_card_insert(reader);
-                printf("insert %s, returned %d\n",
-                        vreader_get_name(reader), error);
-            } else {
-                printf("no reader by id %u found\n", reader_id);
-            }
-        } else if (strncmp(string, "remove", 6) == 0) {
-            if (string[6] == ' ') {
-                reader_id = get_id_from_string(&string[7], reader_id);
-            }
-            reader = vreader_get_reader_by_id(reader_id);
-            if (reader != NULL) {
-                error = vcard_emul_force_card_remove(reader);
-                printf("remove %s, returned %d\n",
-                        vreader_get_name(reader), error);
-            } else {
-                printf("no reader by id %u found\n", reader_id);
-            }
-        } else if (strncmp(string, "select", 6) == 0) {
-            if (string[6] == ' ') {
-                reader_id = get_id_from_string(&string[7],
-                        VSCARD_UNDEFINED_READER_ID);
-            }
-            if (reader_id != VSCARD_UNDEFINED_READER_ID) {
-                reader = vreader_get_reader_by_id(reader_id);
-            }
-            if (reader) {
-                printf("Selecting reader %u, %s\n", reader_id,
-                        vreader_get_name(reader));
-                default_reader_id = reader_id;
-            } else {
-                printf("Reader with id %u not found\n", reader_id);
-            }
-        } //TODO DEBUG LEVEL   
-        else if (strncmp(string, "list", 4) == 0) {
-
-            VReaderList *list = vreader_get_reader_list();
-            VReaderListEntry *reader_entry;
-            printf("Active Readers:\n");
-            for (reader_entry = vreader_list_get_first(list); reader_entry;
-                    reader_entry = vreader_list_get_next(reader_entry)) {
-                VReader *r = vreader_list_get_reader(reader_entry);
-                vreader_id_t id;
-                id = vreader_get_id(r);
-                if (id == (vreader_id_t)-1) {
-                    continue;
-                }
-                printf("%3u %s %s\n", id,
-                        vreader_card_is_present(r) == VREADER_OK ?
-                        "CARD_PRESENT" : "            ",
-                        vreader_get_name(r));
-            }
-            printf("Inactive Readers:\n");
-            for (reader_entry = vreader_list_get_first(list); reader_entry;
-                    reader_entry = vreader_list_get_next(reader_entry)) {
-                VReader *r = vreader_list_get_reader(reader_entry);
-                vreader_id_t id;
-                id = vreader_get_id(reader);
-                if (id != (vreader_id_t)-1) {
-                    continue;
-                }
-
-                printf("INA %s %s\n",
-                        vreader_card_is_present(r) == VREADER_OK ?
-                        "CARD_PRESENT" : "            ",
-                        vreader_get_name(r));
-            }
-            vreader_list_delete(list);
-        } else if (*string != 0) {
-            printf("valid commands:\n");
-            printf("insert [reader_id]\n");
-            printf("remove [reader_id]\n");
-            printf("select reader_id\n");
-            printf("list\n");
-            printf("debug [level]\n");
-            printf("exit\n");
-        }
-    }
-    vreader_free(reader);
-    printf("> ");
-    fflush(stdout);
-
-    return TRUE;
 }
 
 
