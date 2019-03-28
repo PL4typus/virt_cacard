@@ -10,6 +10,11 @@
 #include "glib-compat.h"
 
 #define ARGS "db=\"sql:%s\" use_hw=removable" //no need for soft options with use_hw=removable
+#define VPCD_CTRL_LEN 	1
+#define VPCD_CTRL_OFF   0
+#define VPCD_CTRL_ON    1
+#define VPCD_CTRL_RESET 2
+#define VPCD_CTRL_ATR	4
 #define APDUBufSize 270
 #define PIN 77777777
 
@@ -19,7 +24,7 @@ static GThread *thread;
 static guint nreaders;
 static GMutex mutex;
 static GCond cond;
-static const char hostname[] = "/dev/null";
+static const char hostname[] = "127.0.0.1";
 
 static gpointer events_thread(gpointer data)
 {
@@ -64,7 +69,6 @@ static gpointer events_thread(gpointer data)
 
     return NULL;
 }
-
 
 static VCardEmulError init_cacard(void)
 {
@@ -131,7 +135,7 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
     g_return_val_if_fail(condition & G_IO_OUT, FALSE);
 
     g_io_channel_write_chars(channel_socket,
-        (gchar *)socket_to_send->data, socket_to_send->len, &bw, &err);
+            (gchar *)socket_to_send->data, socket_to_send->len, &bw, &err);
     if (err != NULL) {
         g_error("Error while sending socket %s", err->message);
         return FALSE;
@@ -145,6 +149,62 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
     return TRUE;
 }
 
+static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpointer data)
+{
+    //TODO: socket read
+    GError *error = NULL;
+    uint8_t *buffer;
+    gsize wasRead, toRead;
+    toRead = APDUBufSize;
+    g_io_channel_read_chars(source, (gchar*)data, toRead, &wasRead, &error); 
+    if (error != NULL){
+        g_error("error while reading: %s", error->message);
+        return FALSE;
+    }
+    buffer = data;
+    /** vpcd communicates over a socked with vpicc usually on port 0x8C7B 
+     *  (configurably via /etc/reader.conf.d/vpcd). 
+     *  So you can connect virtually any program to the virtual smart card reader, 
+     *  as long as you respect the following protocol:
+    __ ___________________________________________________________
+   |    vpcd                      |     vpicc                     |
+   |______________________________|_______________________________|
+   |Length 	  |   Command 	      |  Length 	|   Response      |
+   |0x00 0x01 |	  0x00 (Power Off)|   N/A       |   (No Response) |
+   |0x00 0x01 |	  0x01 (Power On) |	  N/A       |   (No Response) |
+   |0x00 0x01 |	  0x02 (Reset) 	  |	  N/A       |   (No Response) |
+   |0x00 0x01 |	  0x04 (Get ATR)  |  0xXX 0xXX 	|   (ATR)         |
+   |0xXX 0xXX |	  (APDU) 	      |  0xXX 0xXX  |   (R-APDU)      |
+   |__________|___________________|_____________|_________________|
+
+     *  The communication is initiated by vpcd. First the length of the data (in network byte order,
+     *  i.e. big endian) is sent followed by the data itself.
+     **/
+    if(wasRead == VPCD_CTRL_LEN){
+        int code = atoi((char*)data);
+        printf("received: %i\n",code);
+        switch(code){
+            case VPCD_CTRL_ON:
+                //TODO POWER ON
+                break;
+            case VPCD_CTRL_OFF:
+                //TODO POWER OFF
+                break;
+            case VPCD_CTRL_RESET:
+                //TODO RESET
+                break;
+            case VPCD_CTRL_ATR:
+                //TODO ATR
+                break;
+            default:
+                printf("Non recognized code\n");
+        }
+    }else{
+        //TODO PROCESS APDU
+    }
+    return TRUE;
+}
+
 static gboolean socket_prepare_sending(gpointer user_data)
 {
     update_socket_watch();
@@ -152,9 +212,7 @@ static gboolean socket_prepare_sending(gpointer user_data)
     return FALSE;
 }
 
-static gboolean do_socket(GIOChannel *source,
-          GIOCondition condition,
-          gpointer data)
+static gboolean do_socket(GIOChannel *source, GIOCondition condition,gpointer data)
 {
     /* not sure if two watches work well with a single win32 sources */
     if (condition & G_IO_OUT) {
@@ -181,7 +239,7 @@ static void update_socket_watch(void)
     }
 
     socket_tag = g_io_add_watch(channel_socket,
-        G_IO_IN | (out ? G_IO_OUT : 0), do_socket, NULL);
+            G_IO_IN | (out ? G_IO_OUT : 0), do_socket, NULL);
 }
 
 static gboolean do_command(GIOChannel *source, GIOCondition condition, gpointer data)
@@ -322,11 +380,12 @@ int main(int argc, char* argv[])
     int code = 0;
     SOCKET sock;
     uint16_t port = VPCDPORT;
+    gpointer *data = malloc(APDUBufSize*sizeof(uint8_t));
 
     loop = g_main_loop_new(NULL, TRUE);
-/**
- **************** vCAC INIT *******************
- **/
+    /**
+     **************** vCAC INIT *******************
+     **/
     ret = init_cacard();
     if(ret != VCARD_EMUL_OK) return EXIT_FAILURE;
 
@@ -335,12 +394,13 @@ int main(int argc, char* argv[])
     g_io_channel_set_encoding(channel_socket, NULL, NULL);
     /* we buffer ourself for thread safety reasons */
     g_io_channel_set_buffered(channel_socket, FALSE);
+    do_socket_read(channel_socket, G_IO_IN, data);
 
-/**
- **************** Clean up  ******************
- **/
+    /**
+     **************** Clean up  ******************
+     **/
     r = vreader_get_reader_by_id(0);
-    
+
     /* This probably supposed to be a event that terminates the loop */
     vevent_queue_vevent(vevent_new(VEVENT_LAST, r, NULL));
 
@@ -350,6 +410,8 @@ int main(int argc, char* argv[])
     /* Clean up */
     vreader_free(r);
 
+    g_io_channel_shutdown(channel_socket, TRUE, NULL);
+    g_io_channel_unref(channel_socket);
     g_main_loop_unref(loop);
     return code;
 }
