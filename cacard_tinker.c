@@ -156,6 +156,8 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     uint8_t *buffer;
     gsize wasRead, toRead;
     toRead = APDUBufSize;
+    uint16_t rcvLength;
+
     g_io_channel_read_chars(source, (gchar*)data, toRead, &wasRead, &error); 
     if (error != NULL){
         g_error("error while reading: %s", error->message);
@@ -180,27 +182,37 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
      *  The communication is initiated by vpcd. First the length of the data (in network byte order,
      *  i.e. big endian) is sent followed by the data itself.
      **/
-    if(wasRead == VPCD_CTRL_LEN){
-        int code = atoi((char*)data);
+    
+    rcvLength = (*buffer << 8);
+    buffer++;
+    rcvLength = rcvLength | *buffer;
+    buffer++;
+    if(rcvLength == VPCD_CTRL_LEN){
+        int code = *buffer;
         printf("received: %i\n",code);
         switch(code){
             case VPCD_CTRL_ON:
                 //TODO POWER ON
+                printf("Power on requested by vpcd\n");
                 break;
             case VPCD_CTRL_OFF:
                 //TODO POWER OFF
+                printf("Power off requested by vpcd\n");
                 break;
             case VPCD_CTRL_RESET:
                 //TODO RESET
+                printf("Reset requested by vpcd\n");
                 break;
             case VPCD_CTRL_ATR:
                 //TODO ATR
+                printf("ATR requested by vpcd\n");
                 break;
             default:
                 printf("Non recognized code\n");
         }
     }else{
         //TODO PROCESS APDU
+        printf("Received APDU of size %i:\n%s\n",rcvLength,buffer);
     }
     return TRUE;
 }
