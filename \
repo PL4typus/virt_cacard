@@ -33,6 +33,13 @@
 #include "glib-compat.h"
 
 #define ARGS "db=\"sql:%s\" use_hw=removable" //no need for soft options with use_hw=removable
+#define VPCD_CTRL_LEN 	1
+#define VPCD_CTRL_OFF   0
+#define VPCD_CTRL_ON    1
+#define VPCD_CTRL_RESET 2
+#define VPCD_CTRL_ATR	4
+#define APDUBufSize 270
+#define MAX_ATR_LEN 40
 #define PIN 77777777
 
 
@@ -45,8 +52,6 @@ static GIOChannel *channel_socket;
 static GByteArray *socket_to_send;
 static CompatGMutex socket_to_send_lock;
 static guint socket_tag;
-
-
 /** FIXME
  ** Get these names another way
  **/
@@ -134,9 +139,19 @@ static VCardEmulError init_cacard(void)
     return ret;
 }
 
-static void update_socket_watch(void);
+static unsigned int get_id_from_string(char *string, unsigned int default_id)
+{
+    unsigned int id = atoi(string);
 
-static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpointer data)
+    /* don't accidentally swith to zero because no numbers have been supplied */
+    if ((id == 0) && *string != '0') {
+        return default_id;
+    }
+    return id;
+}
+
+//static void update_socket_watch(void);
+static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpointer data, uint16_t length)
 {
     gsize bw;
     GError *error = NULL;
@@ -158,8 +173,9 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
     return TRUE;
 }
 
-static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpointer data)
+static gboolean do_socket_read(GIOChannel *source, GIOCondition condition)
 {
+    //TODO: socket read
     GError *error = NULL;
     uint8_t *buffer = calloc(APDUBufSize, sizeof(uint8_t));
     gsize wasRead, toRead;
@@ -175,7 +191,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
      *  (configurably via /etc/reader.conf.d/vpcd). 
      *  So you can connect virtually any program to the virtual smart card reader, 
      *  as long as you respect the following protocol:
-      _____________________________________________________________
+     _____________________________________________________________
      |    vpcd                      |     vpicc                    |
      |______________________________|______________________________|
      |Length 	|   Command 	    |  Length 	 |   Response      |
@@ -216,10 +232,8 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                 uint8_t *reply;
                 VReader *r = vreader_get_reader_by_name(reader_name);
                 uint16_t atr_length = MAX_ATR_LEN;
-                atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
+                atr = malloc(MAX_ATR_LEN*sizeof(uint8_t));
                 vreader_power_on(r, atr, (int*)&atr_length);
-                // FIXME: Make better use of GByteArray
-                reply = calloc(atr_length+2,sizeof(uint8_t));
                 //Format reply with the first two bytes for length and then the data:
                 reply[0] = (atr_length >> 8) & 0xff;
                 reply[1] = atr_length & 0xff;
@@ -228,7 +242,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                 }
                 g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
                 g_byte_array_append(socket_to_send, reply, atr_length+2);
-                do_socket_send(channel_socket, G_IO_OUT, NULL);
+                g_idle_add(socket_prepare_sending, NULL);
                 g_mutex_unlock(&socket_to_send_lock);
                 free(atr);
                 free(reply);
@@ -245,7 +259,14 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     return TRUE;
 }
 
-static gboolean do_socket(GIOChannel *source, GIOCondition condition, gpointer data)
+static gboolean socket_prepare_sending(gpointer user_data)
+{
+    update_socket_watch();
+
+    return FALSE;
+}
+
+static gboolean do_socket(GIOChannel *source, GIOCondition condition,gpointer data)
 {
     if (condition & G_IO_OUT) {
         if (!do_socket_send(source, condition, data)) {
@@ -261,7 +282,6 @@ static gboolean do_socket(GIOChannel *source, GIOCondition condition, gpointer d
 
     return TRUE;
 }
-
 static void update_socket_watch(void)
 {
     gboolean out = socket_to_send->len > 0;
@@ -296,8 +316,8 @@ int main(int argc, char* argv[])
     g_io_channel_set_encoding(channel_socket, NULL, NULL);
     /* we buffer ourself for thread safety reasons */
     g_io_channel_set_buffered(channel_socket, FALSE);
-    while(do_socket_read(channel_socket, G_IO_IN, NULL)){
-    }
+    do_socket_read(channel_socket, G_IO_IN);
+
     /**
      **************** Clean up  ******************
      **/
