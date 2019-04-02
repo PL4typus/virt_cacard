@@ -35,6 +35,10 @@
 #define ARGS "db=\"sql:%s\" use_hw=removable" //no need for soft options with use_hw=removable
 #define PIN 77777777
 
+typedef enum convmode{
+  HEX2BYTES = 0,
+  BYTES2HEX
+} convmode;
 
 static GMainLoop *loop;
 static GThread *thread;
@@ -158,13 +162,76 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
     return TRUE;
 }
 
+void convert_byte_hex(int *hex, uint8_t *part1, uint8_t *part2, convmode mode){
+    switch(mode){
+        case HEX2BYTES:
+            //Cut one hex variable into two bytes
+            *part1 = (*hex >> 8) & 0xff;
+            *part2 = *hex & 0xff;
+            break;
+        case BYTES2HEX:
+            //Merge two bytes into one hex variable
+            *hex = (*part1 << 8) ;
+            *hex = *hex | *part2 ;
+            break;
+    }
+}
+
+void make_reply_apdu(uint8_t *buffer, int send_buff_len){
+    int receive_buf_len = APDUBufSize;
+    uint8_t part1, part2, receive_buff[APDUBufSize];
+    /* get by name ref */  
+    VReader *r = vreader_get_reader_by_name(reader_name);
+    g_mutex_lock(&socket_to_send_lock);
+
+    g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
+    VReaderStatus status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
+    if(status != VREADER_OK){
+      vreader_free(r); 
+    }
+    //Format reply with the first two bytes for length and then the data:
+    convert_byte_hex(&receive_buf_len, &part1, &part2, HEX2BYTES);
+    g_byte_array_append(socket_to_send,&part1, 1);
+    g_byte_array_append(socket_to_send,&part2, 1);
+    g_byte_array_append(socket_to_send,receive_buff,receive_buf_len);
+    
+    do_socket_send(channel_socket, G_IO_OUT, NULL);
+    g_mutex_unlock(&socket_to_send_lock);
+    vreader_free(r);
+}
+
+void make_reply_atr(){
+    g_mutex_lock(&socket_to_send_lock);
+    uint8_t *atr;
+    uint8_t *reply;
+    VReader *r = vreader_get_reader_by_name(reader_name);
+    int atr_length = MAX_ATR_LEN;
+    atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
+    vreader_power_on(r, atr, (int*)&atr_length);
+    // FIXME: Make better use of GByteArray
+    reply = calloc(atr_length+2,sizeof(uint8_t));
+    //Format reply with the first two bytes for length and then the data:
+    convert_byte_hex(&atr_length, &reply[0], &reply[1],HEX2BYTES);
+    for(int i = 0; i < atr_length; i++){
+        reply[i+2] = atr[i];
+    }
+    g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
+    g_byte_array_append(socket_to_send, reply, atr_length+2);
+    do_socket_send(channel_socket, G_IO_OUT, NULL);
+    g_mutex_unlock(&socket_to_send_lock);
+    free(atr);
+    free(reply);
+    vreader_free(r);
+}
+
+
 static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpointer data)
 {
     GError *error = NULL;
     uint8_t *buffer = calloc(APDUBufSize, sizeof(uint8_t));
     gsize wasRead, toRead;
     toRead = APDUBufSize;
-    gsize rcvLength;
+    int rcvLength;
 
     g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error); 
     if (error != NULL){
@@ -190,11 +257,10 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
      *  i.e. big endian) is sent followed by the data itself.
      **/
 
-    rcvLength = (buffer[0] << 8);
-    rcvLength = rcvLength | buffer[1];
+    convert_byte_hex(&rcvLength, &buffer[0], &buffer[1], BYTES2HEX);
     if(rcvLength == VPCD_CTRL_LEN){
         int code = buffer[2];
-        printf("received: %i\n",code);
+        printf("received ctrl code: %i\n",code);
         switch(code){
             case VPCD_CTRL_ON:
                 //TODO POWER ON
@@ -209,36 +275,15 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                 printf("Reset requested by vpcd\n");
                 break;
             case VPCD_CTRL_ATR:
-                //TODO ATR
                 printf("ATR requested by vpcd\n");
-                g_mutex_lock(&socket_to_send_lock);
-                uint8_t *atr;
-                uint8_t *reply;
-                VReader *r = vreader_get_reader_by_name(reader_name);
-                uint16_t atr_length = MAX_ATR_LEN;
-                atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
-                vreader_power_on(r, atr, (int*)&atr_length);
-                // FIXME: Make better use of GByteArray
-                reply = calloc(atr_length+2,sizeof(uint8_t));
-                //Format reply with the first two bytes for length and then the data:
-                reply[0] = (atr_length >> 8) & 0xff;
-                reply[1] = atr_length & 0xff;
-                for(int i = 0; i < atr_length; i++){
-                    reply[i+2] = atr[i];
-                }
-                g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
-                g_byte_array_append(socket_to_send, reply, atr_length+2);
-                do_socket_send(channel_socket, G_IO_OUT, NULL);
-                g_mutex_unlock(&socket_to_send_lock);
-                free(atr);
-                free(reply);
+                make_reply_atr();
                 break;
             default:
                 printf("Non recognized code\n");
         }
     }else{
-        //TODO PROCESS APDU
-        printf("Received APDU of size %li:\n",rcvLength);
+        printf("Received APDU of size %i:\n",rcvLength);
+        make_reply_apdu(buffer, rcvLength);
     }
     free(buffer);
 
