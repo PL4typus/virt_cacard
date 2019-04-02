@@ -36,8 +36,8 @@
 #define PIN 77777777
 
 typedef enum convmode{
-  HEX2BYTES = 0,
-  BYTES2HEX
+    HEX2BYTES = 0,
+    BYTES2HEX
 } convmode;
 
 static GMainLoop *loop;
@@ -48,7 +48,7 @@ static GCond cond;
 static GIOChannel *channel_socket;
 static GByteArray *socket_to_send;
 static CompatGMutex socket_to_send_lock;
-static guint socket_tag;
+//static guint socket_tag;
 
 
 /** FIXME
@@ -138,7 +138,7 @@ static VCardEmulError init_cacard(void)
     return ret;
 }
 
-static void update_socket_watch(void);
+//static void update_socket_watch(void);
 
 static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpointer data)
 {
@@ -154,11 +154,12 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
         return FALSE;
     }
     g_byte_array_remove_range(socket_to_send, 0, bw);
-
-    if (socket_to_send->len == 0) {
-        update_socket_watch();
-        return FALSE;
-    }
+    /*
+       if (socket_to_send->len == 0) {
+       update_socket_watch();
+       return FALSE;
+       }
+       */
     return TRUE;
 }
 
@@ -177,51 +178,84 @@ void convert_byte_hex(int *hex, uint8_t *part1, uint8_t *part2, convmode mode){
     }
 }
 
-void make_reply_apdu(uint8_t *buffer, int send_buff_len){
+gboolean make_reply_poweroff(){
+    VReader *r = vreader_get_reader_by_name(reader_name);
+    VReaderStatus status = vreader_power_off(r);
+
+    vreader_free(r);
+    if(status != VREADER_OK){
+        printf("Error powering off card\n");
+        return FALSE;
+    }
+    return TRUE;
+}
+
+gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
     int receive_buf_len = APDUBufSize;
     uint8_t part1, part2, receive_buff[APDUBufSize];
+    VReaderStatus status; 
     /* get by name ref */  
     VReader *r = vreader_get_reader_by_name(reader_name);
     g_mutex_lock(&socket_to_send_lock);
 
     g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
-    VReaderStatus status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
+    if (r != NULL){
+        status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
+    }else{
+        printf("Error getting reader\n");
+        return FALSE;
+    }
     if(status != VREADER_OK){
-      vreader_free(r); 
+        printf("xfr apdu failed\n");
+        vreader_free(r); 
+        return FALSE;
     }
     //Format reply with the first two bytes for length and then the data:
     convert_byte_hex(&receive_buf_len, &part1, &part2, HEX2BYTES);
     g_byte_array_append(socket_to_send,&part1, 1);
     g_byte_array_append(socket_to_send,&part2, 1);
     g_byte_array_append(socket_to_send,receive_buff,receive_buf_len);
-    
-    do_socket_send(channel_socket, G_IO_OUT, NULL);
+
+    gboolean isSent = do_socket_send(channel_socket, G_IO_OUT, NULL);
     g_mutex_unlock(&socket_to_send_lock);
     vreader_free(r);
+    return isSent;
 }
 
-void make_reply_atr(){
+gboolean make_reply_atr(){
     g_mutex_lock(&socket_to_send_lock);
     uint8_t *atr;
     uint8_t *reply;
+    gboolean isSent = FALSE;
     VReader *r = vreader_get_reader_by_name(reader_name);
+    if( r  == NULL){
+        printf("Reader pb\n");
+        g_mutex_unlock(&socket_to_send_lock);
+        return isSent;
+    }
     int atr_length = MAX_ATR_LEN;
     atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
-    vreader_power_on(r, atr, (int*)&atr_length);
-    // FIXME: Make better use of GByteArray
-    reply = calloc(atr_length+2,sizeof(uint8_t));
-    //Format reply with the first two bytes for length and then the data:
-    convert_byte_hex(&atr_length, &reply[0], &reply[1],HEX2BYTES);
-    for(int i = 0; i < atr_length; i++){
-        reply[i+2] = atr[i];
+    VReaderStatus status = vreader_power_on(r, atr, (int*)&atr_length);
+    if ( status == VREADER_OK){
+        // FIXME: Make better use of GByteArray
+        reply = calloc(atr_length+2,sizeof(uint8_t));
+        //Format reply with the first two bytes for length and then the data:
+        convert_byte_hex(&atr_length, &reply[0], &reply[1],HEX2BYTES);
+        for(int i = 0; i < atr_length; i++){
+            reply[i+2] = atr[i];
+        }
+        g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
+        g_byte_array_append(socket_to_send, reply, atr_length+2);
+        isSent = do_socket_send(channel_socket, G_IO_OUT, NULL);
+    }else{
+        printf("Error getting atr");
+        isSent = FALSE;
     }
-    g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
-    g_byte_array_append(socket_to_send, reply, atr_length+2);
-    do_socket_send(channel_socket, G_IO_OUT, NULL);
     g_mutex_unlock(&socket_to_send_lock);
     free(atr);
     free(reply);
     vreader_free(r);
+    return isSent;
 }
 
 
@@ -232,17 +266,20 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     gsize wasRead, toRead;
     toRead = APDUBufSize;
     int rcvLength;
+    gboolean isOk;
+    static gboolean poweredOff = FALSE;
 
     g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error); 
     if (error != NULL){
         g_error("error while reading: %s", error->message);
+        free(buffer);
         return FALSE;
     }
     /** vpcd communicates over a socked with vpicc usually on port 0x8C7B 
      *  (configurably via /etc/reader.conf.d/vpcd). 
      *  So you can connect virtually any program to the virtual smart card reader, 
      *  as long as you respect the following protocol:
-      _____________________________________________________________
+     _____________________________________________________________
      |    vpcd                      |     vpicc                    |
      |______________________________|______________________________|
      |Length 	|   Command 	    |  Length 	 |   Response      |
@@ -265,10 +302,30 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
             case VPCD_CTRL_ON:
                 //TODO POWER ON
                 printf("Power on requested by vpcd\n");
+                if(poweredOff){
+                    printf("Powering up card\n");
+                    poweredOff = FALSE;
+                }else{
+                    printf("Card already powered\n");
+                }
+                isOk = TRUE;
                 break;
             case VPCD_CTRL_OFF:
                 //TODO POWER OFF
                 printf("Power off requested by vpcd\n");
+                if(!poweredOff){
+                    if(make_reply_poweroff()){
+                        printf("powered off card\n");
+                        isOk = TRUE;
+                        poweredOff = TRUE;
+                    }else{
+                        printf("Failed to poweroff card\n");
+                        isOk = FALSE;
+                    }
+                }else{
+                    printf("Card already powered off\n");
+                    isOk = TRUE;
+                }
                 break;
             case VPCD_CTRL_RESET:
                 //TODO RESET
@@ -276,49 +333,70 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                 break;
             case VPCD_CTRL_ATR:
                 printf("ATR requested by vpcd\n");
-                make_reply_atr();
+                if(!poweredOff){
+                    if(make_reply_atr()){
+                        printf(" card answered to reset\n");
+                        isOk = TRUE;
+                    }else{
+                        printf("Failed to get ATR\n");
+                        isOk = FALSE;
+                    }
+                }else{
+                    printf("Card powered off\n");
+                }
                 break;
             default:
                 printf("Non recognized code\n");
         }
     }else{
         printf("Received APDU of size %i:\n",rcvLength);
-        make_reply_apdu(buffer, rcvLength);
+        if(!poweredOff){
+            if(make_reply_apdu(buffer, rcvLength)){
+                printf(" card answered to APDU\n");
+                isOk = TRUE;
+            }else{
+                printf("Failed to answer to APDU\n");
+                isOk = FALSE;
+            }
+        }else{
+            printf("Card powered off\n");
+        }
     }
     free(buffer);
 
-    return TRUE;
+    return isOk;
 }
+/*
+   static gboolean do_socket(GIOChannel *source, GIOCondition condition, gpointer data)
+   {
+   if (condition & G_IO_OUT) {
+   if (!do_socket_send(source, condition, data)) {
+   return FALSE;
+   }
+   }
 
-static gboolean do_socket(GIOChannel *source, GIOCondition condition, gpointer data)
-{
-    if (condition & G_IO_OUT) {
-        if (!do_socket_send(source, condition, data)) {
-            return FALSE;
-        }
-    }
+   if (condition & G_IO_IN) {
+   if (!do_socket_read(source, condition, data)) {
+   return FALSE;
+   }
+   }
 
-    if (condition & G_IO_IN) {
-        if (!do_socket_read(source, condition, data)) {
-            return FALSE;
-        }
-    }
+   return TRUE;
+   }
+   */
+/*
+   static void update_socket_watch(void)
+   {
+   gboolean out = socket_to_send->len > 0;
 
-    return TRUE;
-}
+   if (socket_tag != 0) {
+   g_source_remove(socket_tag);
+   }
 
-static void update_socket_watch(void)
-{
-    gboolean out = socket_to_send->len > 0;
-
-    if (socket_tag != 0) {
-        g_source_remove(socket_tag);
-    }
-
-    socket_tag = g_io_add_watch(channel_socket,
-            G_IO_IN | (out ? G_IO_OUT : 0), do_socket, NULL);
-}
-
+   socket_tag = g_io_add_watch(channel_socket,
+   G_IO_IN | (out ? G_IO_OUT : 0), do_socket, NULL);
+   }
+   */
 
 int main(int argc, char* argv[])
 {
