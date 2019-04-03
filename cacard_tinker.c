@@ -140,6 +140,15 @@ static VCardEmulError init_cacard(void)
 
 //static void update_socket_watch(void);
 
+void print_apdu(uint8_t *apdu, int length){
+    printf("APDU:\t");
+    for(int i = 0; i < length; i++){
+        printf("0x%x ", apdu[i]);
+    }
+    printf("\n");
+}
+
+
 static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpointer data)
 {
     gsize bw;
@@ -210,6 +219,7 @@ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
         vreader_free(r); 
         return FALSE;
     }
+    print_apdu(receive_buff, receive_buf_len);
     //Format reply with the first two bytes for length and then the data:
     convert_byte_hex(&receive_buf_len, &part1, &part2, HEX2BYTES);
     g_byte_array_append(socket_to_send,&part1, 1);
@@ -259,14 +269,33 @@ gboolean make_reply_atr(){
 }
 
 
+/** vpcd communicates over a socked with vpicc usually on port 0x8C7B 
+ *  (configurably via /etc/reader.conf.d/vpcd). 
+ *  So you can connect virtually any program to the virtual smart card reader, 
+ *  as long as you respect the following protocol:
+ _____________________________________________________________
+ |    vpcd                      |     vpicc                    |
+ |______________________________|______________________________|
+ |Length 	|   Command 	    |  Length 	 |   Response      |
+ |0x00 0x01 |  0x00 (Power Off) |   N/A      |   (No Response) |
+ |0x00 0x01 |  0x01 (Power On)  |	  N/A    |   (No Response) |
+ |0x00 0x01 |  0x02 (Reset) 	|	  N/A    |   (No Response) |
+ |0x00 0x01 |  0x04 (Get ATR)   |  0xXX 0xXX |   (ATR)         |
+ |0xXX 0xXX |  (APDU) 	        |  0xXX 0xXX |   (R-APDU)      |
+ |__________|___________________|____________|_________________|
+
+ *  The communication is initiated by vpcd. First the length of the data (in network byte order,
+ *  i.e. big endian) is sent followed by the data itself.
+ **/
+
 static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpointer data)
 {
     GError *error = NULL;
     uint8_t *buffer = calloc(APDUBufSize, sizeof(uint8_t));
-    gsize wasRead, toRead;
-    toRead = APDUBufSize;
-    int rcvLength;
-    gboolean isOk;
+    gsize wasRead = 0;
+    gsize toRead = 2; // The first two bytes contain the length of the following message
+    int rcvLength = 0;
+    gboolean isOk = FALSE;
     static gboolean poweredOff = FALSE;
 
     g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error); 
@@ -275,65 +304,36 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
         free(buffer);
         return FALSE;
     }
-    /** vpcd communicates over a socked with vpicc usually on port 0x8C7B 
-     *  (configurably via /etc/reader.conf.d/vpcd). 
-     *  So you can connect virtually any program to the virtual smart card reader, 
-     *  as long as you respect the following protocol:
-     _____________________________________________________________
-     |    vpcd                      |     vpicc                    |
-     |______________________________|______________________________|
-     |Length 	|   Command 	    |  Length 	 |   Response      |
-     |0x00 0x01 |  0x00 (Power Off) |   N/A      |   (No Response) |
-     |0x00 0x01 |  0x01 (Power On)  |	  N/A    |   (No Response) |
-     |0x00 0x01 |  0x02 (Reset) 	|	  N/A    |   (No Response) |
-     |0x00 0x01 |  0x04 (Get ATR)   |  0xXX 0xXX |   (ATR)         |
-     |0xXX 0xXX |  (APDU) 	        |  0xXX 0xXX |   (R-APDU)      |
-     |__________|___________________|____________|_________________|
 
-     *  The communication is initiated by vpcd. First the length of the data (in network byte order,
-     *  i.e. big endian) is sent followed by the data itself.
-     **/
+    if(wasRead == 2){
+        convert_byte_hex(&rcvLength, &buffer[0], &buffer[1], BYTES2HEX);
 
-    convert_byte_hex(&rcvLength, &buffer[0], &buffer[1], BYTES2HEX);
-    if(rcvLength == VPCD_CTRL_LEN){
-        int code = buffer[2];
-        printf("received ctrl code: %i\n",code);
-        switch(code){
-            case VPCD_CTRL_ON:
-                //TODO POWER ON
-                printf("Power on requested by vpcd\n");
-                if(poweredOff){
+        printf("rcvLength = %i\n wasRead = %li\n",rcvLength, wasRead);
+        g_io_channel_read_chars(source, (gchar *) buffer, rcvLength, &wasRead, &error);
+        printf("second part rcvLength = %i\n wasRead = %li\n",rcvLength, wasRead);
+        if(wasRead == VPCD_CTRL_LEN){
+            int code = buffer[0];
+            printf("received ctrl code: %i\n",code);
+            switch(code){
+                case VPCD_CTRL_ON:
+                    //TODO POWER ON
+                    printf("Power on requested by vpcd\n");
                     printf("Powering up card\n");
-                    poweredOff = FALSE;
-                }else{
                     printf("Card already powered\n");
-                }
-                isOk = TRUE;
-                break;
-            case VPCD_CTRL_OFF:
-                //TODO POWER OFF
-                printf("Power off requested by vpcd\n");
-                if(!poweredOff){
-                    if(make_reply_poweroff()){
-                        printf("powered off card\n");
-                        isOk = TRUE;
-                        poweredOff = TRUE;
-                    }else{
-                        printf("Failed to poweroff card\n");
-                        isOk = FALSE;
-                    }
-                }else{
-                    printf("Card already powered off\n");
                     isOk = TRUE;
-                }
-                break;
-            case VPCD_CTRL_RESET:
-                //TODO RESET
-                printf("Reset requested by vpcd\n");
-                break;
-            case VPCD_CTRL_ATR:
-                printf("ATR requested by vpcd\n");
-                if(!poweredOff){
+                    break;
+                case VPCD_CTRL_OFF:
+                    //TODO POWER OFF
+                    printf("Power off requested by vpcd\n");
+                    printf("powered off card\n");
+                    isOk = TRUE;
+                    break;
+                case VPCD_CTRL_RESET:
+                    //TODO RESET
+                    printf("Reset requested by vpcd\n");
+                    break;
+                case VPCD_CTRL_ATR:
+                    printf("ATR requested by vpcd\n");
                     if(make_reply_atr()){
                         printf(" card answered to reset\n");
                         isOk = TRUE;
@@ -341,16 +341,13 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                         printf("Failed to get ATR\n");
                         isOk = FALSE;
                     }
-                }else{
-                    printf("Card powered off\n");
-                }
-                break;
-            default:
-                printf("Non recognized code\n");
-        }
-    }else{
-        printf("Received APDU of size %i:\n",rcvLength);
-        if(!poweredOff){
+                    break;
+                default:
+                    printf("Non recognized code\n");
+            }
+        }else{
+            printf("Received APDU of size %i:\n",rcvLength);
+            print_apdu(buffer, rcvLength);
             if(make_reply_apdu(buffer, rcvLength)){
                 printf(" card answered to APDU\n");
                 isOk = TRUE;
@@ -358,12 +355,13 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                 printf("Failed to answer to APDU\n");
                 isOk = FALSE;
             }
-        }else{
-            printf("Card powered off\n");
         }
     }
     free(buffer);
-
+    g_io_channel_flush(channel_socket, &error);
+    if(error != NULL){
+        g_error("Error while flushing: %s", error->message);
+    }
     return isOk;
 }
 /*
@@ -424,7 +422,7 @@ int main(int argc, char* argv[])
     /**
      **************** Clean up  ******************
      **/
-    r = vreader_get_reader_by_id(0);
+    r = vreader_get_reader_by_name(reader_name);
 
     /* This probably supposed to be a event that terminates the loop */
     vevent_queue_vevent(vevent_new(VEVENT_LAST, r, NULL));
