@@ -3,8 +3,8 @@
 SRCDIR=`dirname "$0"`
 NSSDB=db
 CONF=softhsm2.conf
-SOPIN="12345678"
-PIN="77777777"
+SOPIN="77777777"
+PIN="12345678"
 export GNUTLS_PIN=$PIN
 
 P11LIB=/usr/lib64/pkcs11/libsofthsm2.so

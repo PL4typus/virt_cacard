@@ -33,7 +33,7 @@
 #include "glib-compat.h"
 
 #define ARGS "db=\"sql:%s\" use_hw=removable" //no need for soft options with use_hw=removable
-#define PIN 77777777
+#define PIN 12345678
 
 typedef enum convmode{
     HEX2BYTES = 0,
@@ -54,7 +54,7 @@ static CompatGMutex socket_to_send_lock;
 /** FIXME
  ** Get these names another way
  **/
-static char* reader_name = "SoftHSM slot ID 0x4590c6e6";
+static char* reader_name = "SoftHSM slot ID 0x8f994c7";
 static const char hostname[] = "127.0.0.1";
 
 static gpointer events_thread(gpointer data)
