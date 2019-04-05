@@ -183,12 +183,7 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
         return FALSE;
     }
     g_byte_array_remove_range(socket_to_send, 0, bw);
-    /*
-       if (socket_to_send->len == 0) {
-       update_socket_watch();
-       return FALSE;
-       }
-       */
+    
     return TRUE;
 }
 
