@@ -48,11 +48,10 @@ static GCond cond;
 static GIOChannel *channel_socket;
 static GByteArray *socket_to_send;
 static CompatGMutex socket_to_send_lock;
-//static guint socket_tag;
 
 
-/** FIXME
- ** Get these names another way
+/** 
+ **  the reader name is automatically detected anyway
  **/
 static char* reader_name = "SoftHSM slot ID 0x8f994c7";
 static const char hostname[] = "127.0.0.1";
@@ -151,14 +150,13 @@ static VCardEmulError init_cacard(void)
             g_mutex_lock(&mutex);
             while (nreaders <= 1)
                 g_cond_wait(&cond, &mutex);
-            g_free(args);
-            g_free(dbdir);
         }
     }
+    g_free(args);
+    g_free(dbdir);
     return ret;
 }
 
-//static void update_socket_watch(void);
 
 void print_apdu(uint8_t *apdu, int length){
     printf("APDU:\t");
@@ -183,7 +181,7 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
         return FALSE;
     }
     g_byte_array_remove_range(socket_to_send, 0, bw);
-    
+
     return TRUE;
 }
 
@@ -202,7 +200,7 @@ void convert_byte_hex(int *hex, uint8_t *part1, uint8_t *part2, convmode mode){
     }
 }
 
-gboolean make_reply_poweroff(){
+gboolean make_reply_poweroff(void){
     VReader *r = vreader_get_reader_by_name(reader_name);
     VReaderStatus status = vreader_power_off(r);
 
@@ -247,7 +245,7 @@ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
     return isSent;
 }
 
-gboolean make_reply_atr(){
+gboolean make_reply_atr(void){
     g_mutex_lock(&socket_to_send_lock);
     uint8_t *atr;
     uint8_t *reply;
@@ -334,13 +332,14 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                     //TODO POWER ON
                     printf("Power on requested by vpcd\n");
                     printf("Powering up card\n");
-                    printf("Card already powered\n");
+                    poweredOff = FALSE;
                     isOk = TRUE;
                     break;
                 case VPCD_CTRL_OFF:
                     //TODO POWER OFF
                     printf("Power off requested by vpcd\n");
                     printf("powered off card\n");
+                    poweredOff = make_reply_poweroff();
                     isOk = TRUE;
                     break;
                 case VPCD_CTRL_RESET:
@@ -372,11 +371,11 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
             }
         }
     }
-    free(buffer);
     g_io_channel_flush(channel_socket, &error);
     if(error != NULL){
         g_error("Error while flushing: %s", error->message);
     }
+    free(buffer);
     return isOk;
 }
 
@@ -416,10 +415,13 @@ int main(int argc, char* argv[])
     g_thread_join(thread);
 
     /* Clean up */
+    if (r) /*if /remove didn't run */
+
     vreader_free(r);
 
     g_io_channel_shutdown(channel_socket, TRUE, NULL);
     g_io_channel_unref(channel_socket);
+    closesocket(sock);
     g_main_loop_unref(loop);
     g_byte_array_free(socket_to_send, TRUE);
     return code;
