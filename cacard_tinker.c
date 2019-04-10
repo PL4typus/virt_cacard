@@ -53,7 +53,7 @@ static CompatGMutex socket_to_send_lock;
  **  the reader name is automatically detected anyway
  **/
 static const char* reader_name; 
-static const char hostname[] = "192.168.122.16";
+static const char hostname[] = "127.0.0.1";
 
 static gpointer events_thread(gpointer data)
 {
