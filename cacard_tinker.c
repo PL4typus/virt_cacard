@@ -33,7 +33,6 @@
 #include "glib-compat.h"
 
 #define ARGS "db=\"sql:%s\" use_hw=removable" //no need for soft options with use_hw=removable
-#define PIN 12345678
 
 typedef enum convmode{
     HEX2BYTES = 0,
@@ -53,8 +52,8 @@ static CompatGMutex socket_to_send_lock;
 /** 
  **  the reader name is automatically detected anyway
  **/
-static char* reader_name = "SoftHSM slot ID 0x8f994c7";
-static const char hostname[] = "127.0.0.1";
+static const char* reader_name; 
+static const char hostname[] = "192.168.122.16";
 
 static gpointer events_thread(gpointer data)
 {
@@ -85,9 +84,16 @@ static gpointer events_thread(gpointer data)
         switch (event->type) 
         {
             case VEVENT_READER_INSERT:
+                printf("REMOVE card \tReader name: %s\n", vreader_get_name(event->reader));
+                break;
             case VEVENT_READER_REMOVE:
+                printf("REMOVE reader\n\n\n\n");
+                break;
             case VEVENT_CARD_INSERT:
+                printf("INSERT card\n\n\n\n");
+                break;
             case VEVENT_CARD_REMOVE:
+                printf("REMOVE card \tReader name: %s\n", vreader_get_name(event->reader));
                 break;
             case VEVENT_LAST:
             default:
@@ -146,7 +152,6 @@ static VCardEmulError init_cacard(void)
             ret = VCARD_EMUL_FAIL;
         }else{
             vreader_free(r); /* get by name ref */
-
             g_mutex_lock(&mutex);
             while (nreaders <= 1)
                 g_cond_wait(&cond, &mutex);

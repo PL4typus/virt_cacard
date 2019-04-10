@@ -1,8 +1,7 @@
 IDIR = -I/usr/include/cacard -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include 
-LIBS = -lcacard -lglib-2.0 
+LIBS = -lcacard -lglib-2.0
 CC = gcc
-ASAN_OPTIONS=detect_leaks=1
-CFLAGS = $(IDIR) -Wall -fsanitize=address -fno-omit-frame-pointer
+CFLAGS = $(IDIR) -Wall -fsanitize=thread 
 
 ODIR = obj
 _OBJ = cacard_tinker.o connection.o
