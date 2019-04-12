@@ -106,16 +106,24 @@ static gpointer events_thread(gpointer data)
     return NULL;
 }
 
-static void set_reader_name(void){
+/**
+ * Sets the global reader name
+ * returns TRUE if name has been set,
+ * returns FALSE otherwise
+ **/
+static gboolean set_reader_name(void){
     VReaderList *relist = vreader_get_reader_list();
     VReaderListEntry *rlentry;
     VReader *r;
+    gboolean isSetname = FALSE;
+
     if(relist != NULL){
         rlentry = vreader_list_get_first(relist);
         while(rlentry != NULL){
             r = vreader_list_get_reader(rlentry);
             if(vreader_card_is_present(r) != VREADER_NO_CARD){ 
                 reader_name = vreader_get_name(r);
+                isSetname = (reader_name!=NULL) ? TRUE : FALSE;
                 break;
             }
             rlentry = vreader_list_get_next(rlentry);
@@ -123,8 +131,12 @@ static void set_reader_name(void){
         vreader_free(r);
         vreader_list_delete(relist);
     }
+    return isSetname;
 }
 
+/**
+ * initializes virtual card with given options
+ **/
 static VCardEmulError init_cacard(void)
 {
     char *dbdir = g_build_filename("db",NULL);
@@ -144,8 +156,7 @@ static VCardEmulError init_cacard(void)
     }
     else{
         printf("Init ok with options \"%s\"\n", args);
-        set_reader_name();
-        r = vreader_get_reader_by_name(reader_name);
+        r = set_reader_name() ? vreader_get_reader_by_name(reader_name) : NULL;
 
         if(r == NULL){
             printf("No readers\n");

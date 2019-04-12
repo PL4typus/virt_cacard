@@ -1,3 +1,2 @@
 #!/bin/bash
-SOFTHSM2_CONF=softhsm2,conf
 G_MESSAGES_DEBUG=libcacard LIBCACARD_DEBUG=1 ./cacard_tinker.out
