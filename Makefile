@@ -4,21 +4,21 @@ CC = gcc
 CFLAGS = $(IDIR) -Wall
 
 ODIR = obj
-_OBJ = cacard_tinker.o connection.o
+_OBJ = virt_cacard.o connection.o
 OBJ = $(patsubst %,$(ODIR)/%,$(_OBJ))
 
 $(ODIR)/%.o: %.c
 	$(CC) -c -g -o $@ $< $(CFLAGS) 
 
 
-cacard_tinker.out: $(OBJ)
+virt_cacard.out: $(OBJ)
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 softhsm: 
 	rm -rf db/ tokens/ softhsm2.conf
 	./setup-softhsm2.sh
 
-all: 	clean cacard_tinker.out softhsm
+all: 	clean virt_cacard.out softhsm
 
 
 .PHONY: clean

@@ -1,5 +1,5 @@
 /*
- * cacard_tinker.c A program making use of libcacard and vpcd
+ * virt_cacard.c A program making use of libcacard and vpcd
  * to present a virtual CACard through PC/SC API
  *
  * Copyright (C) 2019 Red Hat
