@@ -190,6 +190,8 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
 
     g_return_val_if_fail(socket_to_send->len != 0, FALSE);
     g_return_val_if_fail(condition & G_IO_OUT, FALSE);
+    if (condition & G_IO_HUP)
+        g_error ("Write end of pipe died!\n");
 
     g_io_channel_write_chars(channel_socket, (gchar *)socket_to_send->data, socket_to_send->len, &bw, &error);
     if (error != NULL) {
@@ -313,7 +315,7 @@ gboolean make_reply_atr(void){
  |0xXX 0xXX |  (APDU) 	        |  0xXX 0xXX |   (R-APDU)      |
  |__________|___________________|____________|_________________|
 
- *  The communication is initiated by vpcd. First the length of the data (in network byte order,
+ *  The commuReadernication is initiated by vpcd. First the length of the data (in network byte order,
  *  i.e. big endian) is sent followed by the data itself.
  **/
 
@@ -324,7 +326,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     gsize wasRead = 0;
     gsize toRead = 2; // The first two bytes contain the length of the following message
     int rcvLength = 0;
-    gboolean isOk = FALSE;
+    gboolean isOk = TRUE;
     static gboolean poweredOff = FALSE;
 
     g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error); 
@@ -349,14 +351,12 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                     printf("Power on requested by vpcd\n");
                     printf("Powering up card\n");
                     poweredOff = FALSE;
-                    isOk = TRUE;
                     break;
                 case VPCD_CTRL_OFF:
                     //TODO POWER OFF
                     printf("Power off requested by vpcd\n");
                     printf("powered off card\n");
                     poweredOff = make_reply_poweroff();
-                    isOk = TRUE;
                     break;
                 case VPCD_CTRL_RESET:
                     //TODO RESET
@@ -369,7 +369,6 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                         isOk = TRUE;
                     }else{
                         printf("Failed to get ATR\n");
-                        isOk = FALSE;
                     }
                     break;
                 default:
@@ -383,7 +382,6 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                 isOk = TRUE;
             }else{
                 printf("Failed to answer to APDU\n");
-                isOk = FALSE;
             }
         }
     }
@@ -406,21 +404,33 @@ int main(int argc, char* argv[])
     socket_to_send = g_byte_array_new();
 
     loop = g_main_loop_new(NULL, TRUE);
+    
     /**
      **************** vCAC INIT *******************
      **/
+    /* init_cacard needs a running main loop to start the reader events thread */
     ret = init_cacard();
     if(ret != VCARD_EMUL_OK) return EXIT_FAILURE;
-
+   /**
+     **************** CONNECTION TO VPCD *******************
+     **/
+    /* Connecting to VPCD and creating an IO channel to manage the socket */
     sock = connectsock(hostname,port);
     channel_socket = g_io_channel_unix_new(sock);
     g_io_channel_set_encoding(channel_socket, NULL, NULL);
-    /* we buffer ourself for thread safety reasons */
     g_io_channel_set_buffered(channel_socket, FALSE);
-    while(do_socket_read(channel_socket, G_IO_IN, NULL)){
-    }
+
+    /* Adding watches to the channel.*/
+    if(!g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL)) 
+        g_error("Error creating watch\n");
+
+    if(!g_io_add_watch(channel_socket, G_IO_OUT | G_IO_HUP, do_socket_send, NULL)) 
+        g_error("Error creating watch\n");
+
+    g_main_loop_run(loop); //explicit
+     
     /**
-     **************** Clean up  ******************
+     **************** CLEAN UP  ******************
      **/
     r = vreader_get_reader_by_name(reader_name);
 
@@ -432,14 +442,14 @@ int main(int argc, char* argv[])
 
     /* Clean up */
     if (r) /*if /remove didn't run */
-
-    vreader_free(r);
+        vreader_free(r);
 
     g_io_channel_shutdown(channel_socket, TRUE, NULL);
     g_io_channel_unref(channel_socket);
     closesocket(sock);
     g_main_loop_unref(loop);
     g_byte_array_free(socket_to_send, TRUE);
+
     return code;
 }
 
