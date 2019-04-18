@@ -432,6 +432,7 @@ int main(int argc, char* argv[])
     /**
      **************** CLEAN UP  ******************
      **/
+    printf("*******\tCleaning up\t*******\n\n");
     r = vreader_get_reader_by_name(reader_name);
 
     /* This probably supposed to be a event that terminates the loop */
