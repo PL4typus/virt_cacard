@@ -276,22 +276,16 @@ gboolean make_reply_atr(void){
     }
     int atr_length = MAX_ATR_LEN;
     atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
-    VReaderStatus status = vreader_power_on(r, atr, (int*)&atr_length);
-    if ( status == VREADER_OK){
-        // FIXME: Make better use of GByteArray
-        reply = calloc(atr_length+2,sizeof(uint8_t));
-        //Format reply with the first two bytes for length and then the data:
-        convert_byte_hex(&atr_length, &reply[0], &reply[1],HEX2BYTES);
-        for(int i = 0; i < atr_length; i++){
-            reply[i+2] = atr[i];
-        }
-        g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
-        g_byte_array_append(socket_to_send, reply, atr_length+2);
-        isSent = do_socket_send(channel_socket, G_IO_OUT, NULL);
-    }else{
-        printf("Error getting atr");
-        isSent = FALSE;
+    vcard_emul_get_atr(NULL, atr, &atr_length);
+    reply = calloc(atr_length+2,sizeof(uint8_t));
+    //Format reply with the first two bytes for length and then the data:
+    convert_byte_hex(&atr_length, &reply[0], &reply[1],HEX2BYTES);
+    for(int i = 0; i < atr_length; i++){
+        reply[i+2] = atr[i];
     }
+    g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
+    g_byte_array_append(socket_to_send, reply, atr_length+2);
+    isSent = do_socket_send(channel_socket, G_IO_OUT, NULL);
     g_mutex_unlock(&socket_to_send_lock);
     free(atr);
     free(reply);
@@ -404,14 +398,14 @@ int main(int argc, char* argv[])
     socket_to_send = g_byte_array_new();
 
     loop = g_main_loop_new(NULL, TRUE);
-    
+
     /**
      **************** vCAC INIT *******************
      **/
     /* init_cacard needs a running main loop to start the reader events thread */
     ret = init_cacard();
     if(ret != VCARD_EMUL_OK) return EXIT_FAILURE;
-   /**
+    /**
      **************** CONNECTION TO VPCD *******************
      **/
     /* Connecting to VPCD and creating an IO channel to manage the socket */
@@ -428,7 +422,7 @@ int main(int argc, char* argv[])
         g_error("Error creating watch\n");
 
     g_main_loop_run(loop); //explicit
-     
+
     /**
      **************** CLEAN UP  ******************
      **/

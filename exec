@@ -1,3 +1,3 @@
 #!/bin/bash
-#G_MESSAGES_DEBUG=libcacard LIBCACARD_DEBUG=1 ./virt_cacard.out
-SOFTHSM2_CONF=softhsm2.conf ./virt_cacard.out
+G_MESSAGES_DEBUG=libcacard LIBCACARD_DEBUG=1 ./virt_cacard.out
+#SOFTHSM2_CONF=softhsm2.conf ./virt_cacard.out
