@@ -276,6 +276,7 @@ gboolean make_reply_atr(void){
     }
     int atr_length = MAX_ATR_LEN;
     atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
+    
     vcard_emul_get_atr(NULL, atr, &atr_length);
     reply = calloc(atr_length+2,sizeof(uint8_t));
     //Format reply with the first two bytes for length and then the data:
