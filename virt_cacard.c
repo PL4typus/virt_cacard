@@ -2,7 +2,7 @@
  * virt_cacard.c A program making use of libcacard and vpcd
  * to present a virtual CACard through PC/SC API
  *
- * Copyright (C) 2019 Red Hat
+ * Copyright (c) 2019 Red Hat
  *
  * Author(s): Pierre-Louis Palant <ppalant@redhat.com>
  *
@@ -50,7 +50,7 @@ static CompatGMutex socket_to_send_lock;
 
 
 /** 
- **  the reader name is automatically detected anyway
+ **  the reader name is automatically detected 
  **/
 static const char* reader_name; 
 static const char hostname[] = "127.0.0.1";
@@ -136,6 +136,7 @@ static gboolean set_reader_name(void){
 
 /**
  * initializes virtual card with given options
+ * Only tested with hw=removable and softhsm2 token
  **/
 static VCardEmulError init_cacard(void)
 {
@@ -182,7 +183,9 @@ void print_apdu(uint8_t *apdu, int length){
     printf("\n");
 }
 
-
+/**
+ * Send an already formatted message across the GIOChannel to pcscd
+ **/
 static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpointer data)
 {
     gsize bw;
@@ -203,6 +206,11 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
     return TRUE;
 }
 
+/**
+ * Write an int on two hex bytes,
+ * or write twohex bytes into one int
+ * Used to get/set length according to vpcd's protocol
+ **/
 void convert_byte_hex(int *hex, uint8_t *part1, uint8_t *part2, convmode mode){
     switch(mode){
         case HEX2BYTES:
@@ -218,6 +226,9 @@ void convert_byte_hex(int *hex, uint8_t *part1, uint8_t *part2, convmode mode){
     }
 }
 
+/**
+ * Power off the card
+ **/
 gboolean make_reply_poweroff(void){
     VReader *r = vreader_get_reader_by_name(reader_name);
     VReaderStatus status = vreader_power_off(r);
@@ -230,6 +241,10 @@ gboolean make_reply_poweroff(void){
     return TRUE;
 }
 
+/**
+ * Responds to apdu. Format the reponse made by libcacard according to 
+ * vpcd's protocol
+ **/
 gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
     int receive_buf_len = APDUBufSize;
     uint8_t part1, part2, receive_buff[APDUBufSize];
@@ -263,6 +278,9 @@ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
     return isSent;
 }
 
+/**
+ * Respond to Get ATR message
+ **/
 gboolean make_reply_atr(void){
     g_mutex_lock(&socket_to_send_lock);
     uint8_t *atr;
@@ -310,7 +328,7 @@ gboolean make_reply_atr(void){
  |0xXX 0xXX |  (APDU) 	        |  0xXX 0xXX |   (R-APDU)      |
  |__________|___________________|____________|_________________|
 
- *  The commuReadernication is initiated by vpcd. First the length of the data (in network byte order,
+ *  The communication is initiated by vpcd. First the length of the data (in network byte order,
  *  i.e. big endian) is sent followed by the data itself.
  **/
 
