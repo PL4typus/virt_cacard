@@ -16,6 +16,7 @@ SOCKET connectsock(const char *hostname, uint16_t port)
 	struct addrinfo hints, *res = NULL, *cur;
 	SOCKET sock = INVALID_SOCKET;
     char _port[10];
+    int err=0;
 
     if (snprintf(_port, sizeof _port, "%hu", port) < 0)
         goto err;
@@ -33,11 +34,14 @@ SOCKET connectsock(const char *hostname, uint16_t port)
 		sock = socket(cur->ai_family, cur->ai_socktype, cur->ai_protocol);
 		if (sock == INVALID_SOCKET)
 			continue;
-
-		if (connect(sock, cur->ai_addr,
-                    cur->ai_addrlen) != -1)
-			break;
-
+        
+        err = connect(sock, cur->ai_addr, cur->ai_addrlen);
+        if (err == -1){
+            perror("connection problem");
+            goto err;
+        }
+        else break;
+        
 		close(sock);
 	}
 

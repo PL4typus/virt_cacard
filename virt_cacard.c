@@ -48,6 +48,7 @@ static GIOChannel *channel_socket;
 static GByteArray *socket_to_send;
 static CompatGMutex socket_to_send_lock;
 
+static guint socket_tag_read, socket_tag_send ;
 
 /** 
  **  the reader name is automatically detected 
@@ -183,6 +184,7 @@ void print_apdu(uint8_t *apdu, int length){
     printf("\n");
 }
 
+
 /**
  * Send an already formatted message across the GIOChannel to pcscd
  **/
@@ -202,6 +204,9 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
         return FALSE;
     }
     g_byte_array_remove_range(socket_to_send, 0, bw);
+    if ( bw == 0){
+        return FALSE;
+    }
 
     return TRUE;
 }
@@ -240,7 +245,20 @@ gboolean make_reply_poweroff(void){
     }
     return TRUE;
 }
+/**
+ * Power on the card
+ **/
+gboolean make_reply_poweron(void){
+    VReader *r = vreader_get_reader_by_name(reader_name);
+    VReaderStatus status = vreader_power_on(r, NULL, NULL);
 
+    vreader_free(r);
+    if(status != VREADER_OK){
+        printf("Error powering on card\n");
+        return FALSE;
+    }
+    return TRUE;
+}
 /**
  * Responds to apdu. Format the reponse made by libcacard according to 
  * vpcd's protocol
@@ -342,6 +360,8 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     gboolean isOk = TRUE;
     static gboolean poweredOff = FALSE;
 
+    if (condition & G_IO_HUP)
+        g_error ("Write end of pipe died!\n");
     g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error); 
     if (error != NULL){
         g_error("error while reading: %s", error->message);
@@ -363,7 +383,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                     //TODO POWER ON
                     printf("Power on requested by vpcd\n");
                     printf("Powering up card\n");
-                    poweredOff = FALSE;
+                    poweredOff = !make_reply_poweron();
                     break;
                 case VPCD_CTRL_OFF:
                     //TODO POWER OFF
@@ -397,6 +417,8 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                 printf("Failed to answer to APDU\n");
             }
         }
+    }else if( wasRead == 0){
+        return FALSE;
     }
     g_io_channel_flush(channel_socket, &error);
     if(error != NULL){
@@ -423,22 +445,31 @@ int main(int argc, char* argv[])
      **/
     /* init_cacard needs a running main loop to start the reader events thread */
     ret = init_cacard();
-    if(ret != VCARD_EMUL_OK) return EXIT_FAILURE;
+    if(ret != VCARD_EMUL_OK)
+        return EXIT_FAILURE;
     /**
      **************** CONNECTION TO VPCD *******************
      **/
     /* Connecting to VPCD and creating an IO channel to manage the socket */
     sock = connectsock(hostname,port);
+    
+    if(sock == -1){
+        printf("Connect sock error\n");
+        return EXIT_FAILURE;
+    }
+
     channel_socket = g_io_channel_unix_new(sock);
     g_io_channel_set_encoding(channel_socket, NULL, NULL);
     g_io_channel_set_buffered(channel_socket, FALSE);
 
     /* Adding watches to the channel.*/
-    if(!g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL)) 
-        g_error("Error creating watch\n");
+    socket_tag_read = g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL);
+    if(!socket_tag_read)
+        g_error("Error creating send watch\n");
 
-    if(!g_io_add_watch(channel_socket, G_IO_OUT | G_IO_HUP, do_socket_send, NULL)) 
-        g_error("Error creating watch\n");
+    socket_tag_send = g_io_add_watch(channel_socket, G_IO_OUT | G_IO_HUP, do_socket_send, NULL);
+    if(!socket_tag_send) 
+        g_error("Error creating send watch\n");
 
     g_main_loop_run(loop); //explicit
 
