@@ -20,4 +20,4 @@ addons:
       - libglib2.0-dev
       - libcacard-dev
 script:
-  - ./autogen.sh && ./configure --prefix=/usr && make all && make distcheck
+  - ./autogen.sh && ./configure && make all && make distcheck
