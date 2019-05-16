@@ -1,0 +1,24 @@
+notifications:
+  email:
+    - ppalant@redhat.com
+    on_success: change
+    on_failure: always
+sudo: required
+dist: trusty
+language: c
+compiler:
+  - clang
+  - gcc
+addons:
+  apt:
+    packages:
+      - automake
+      - autoconf
+      - autoconf-archive
+      - pkg-config
+      - libglib2.0-dev
+      - libcacard-dev
+script:
+  - ./autogen.sh && ./configure --prefix=/usr && make all && make distcheck
+
+
