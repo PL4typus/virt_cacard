@@ -4,13 +4,14 @@ notifications:
   on_success: change
   on_failure: always
 sudo: required
-dist: trusty
+dist: xenial
 language: c
 compiler:
   - clang
   - gcc
 addons:
   apt:
+    update: true
     packages:
       - automake
       - autoconf
