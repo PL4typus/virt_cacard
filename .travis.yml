@@ -18,6 +18,8 @@ addons:
       - autoconf-archive
       - pkg-config
       - libglib2.0-dev
-      - libcacard-dev
+install:
+  - git clone https://gitlab.freedesktop.org/spice/libcacard.git
+  - cd libcacard && ./autogen.sh && ./configure && make && sudo make install
 script:
   - ./autogen.sh && ./configure && make all && make distcheck
