@@ -1,6 +1,6 @@
 EXTRA_DIST = autogen.sh
 
-AM_CFLAGS = -g -Wall -O3 
+AM_CFLAGS = -Wall 
 AM_CFLAGS += $(GLIB_CFLAGS)
 AM_CFLAGS += $(CACARD_CFLAGS) 
 

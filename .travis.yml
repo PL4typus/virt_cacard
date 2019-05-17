@@ -20,6 +20,6 @@ addons:
       - libglib2.0-dev
       - libcacard-dev
 before_script:
-  - pkg-config --cflags libcacard
+  - pkg-config --libs libcacard
 script:
   - ./autogen.sh && ./configure && make && make distcheck

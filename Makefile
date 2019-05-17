@@ -285,7 +285,7 @@ top_build_prefix =
 top_builddir = .
 top_srcdir = .
 EXTRA_DIST = autogen.sh
-AM_CFLAGS = -g -Wall -O3 $(GLIB_CFLAGS) $(CACARD_CFLAGS)
+AM_CFLAGS = -Wall $(GLIB_CFLAGS) $(CACARD_CFLAGS)
 virt_cacard_SOURCES = src/virt_cacard.c src/connection.c src/connection.h
 virt_cacard_LDADD = $(AM_LDFLAGS) $(GLIB_LIBS) $(CACARD_LIBS)
 all: config.h
