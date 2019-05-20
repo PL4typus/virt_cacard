@@ -18,6 +18,7 @@ addons:
       - autoconf-archive
       - pkg-config
       - libglib2.0-dev
+      - libnss3-dev
 before_script:
   - git clone https://gitlab.freedesktop.org/spice/libcacard.git
   - cd libcacard && ./autogen.sh --prefix=/usr && make && sudo make install
