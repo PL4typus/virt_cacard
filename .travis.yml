@@ -22,7 +22,6 @@ addons:
 before_script:
   - git clone https://gitlab.freedesktop.org/spice/libcacard.git
   - cd libcacard && ./autogen.sh --prefix=/usr && make && sudo make install
-  - sudo find / -iname *libcacard*.h*
   - cd ..
 script:
   - ./autogen.sh && ./configure && make && make distcheck
