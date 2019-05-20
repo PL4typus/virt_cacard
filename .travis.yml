@@ -20,6 +20,6 @@ addons:
       - libglib2.0-dev
       - libcacard-dev
 before_script:
-  - sudo find / -iname *libcacard*.so*
+  - sudo find / -iname *libcacard*.h*
 script:
   - ./autogen.sh && ./configure && make && make distcheck
