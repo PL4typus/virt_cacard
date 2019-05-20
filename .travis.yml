@@ -23,6 +23,6 @@ before_script:
   - cd ..
   - git clone https://gitlab.freedesktop.org/spice/libcacard.git
   - cd libcacard && ./autogen.sh --prefix=/usr && make && sudo make install
-  - cd -
+  - cd ../virt_cacard 
 script:
   - ./autogen.sh && ./configure && make && make distcheck
