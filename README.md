@@ -10,4 +10,4 @@ The [virtual pcscd](https://github.com/frankmorgner/vsmartcard/tree/master/virtu
 The virtual smart card, emulated with [libcacard](https://gitlab.freedesktop.org/spice/libcacard/), connects to the socket and can then get (and reply to) APDUs from the application. From the point of view of the application, the process is transparent. 
 
 
-[![Build Status](https://travis-ci.org/PL4typus/virt_cacard.svg?branch=travis)](https://travis-ci.org/PL4typus/virt_cacard)
+[![Build Status](https://travis-ci.org/PL4typus/virt_cacard.svg?branch=current)](https://travis-ci.org/PL4typus/virt_cacard)
