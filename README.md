@@ -11,3 +11,10 @@ The virtual smart card, emulated with [libcacard](https://gitlab.freedesktop.org
 
 
 [![Build Status](https://travis-ci.org/PL4typus/virt_cacard.svg?branch=current)](https://travis-ci.org/PL4typus/virt_cacard)
+
+---
+## How to build
+
+    ./autogen.sh
+    ./configure
+    make
