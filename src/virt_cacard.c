@@ -431,7 +431,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
 
 int main(int argc, char* argv[])
 {
-    VReader *r;
+    VReader *r = NULL;
     VCardEmulError ret;
     int code = 0;
     SOCKET sock;

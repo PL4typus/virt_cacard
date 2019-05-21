@@ -1,0 +1,28 @@
+notifications:
+  email:
+    - ppalant@redhat.com
+  on_success: change
+  on_failure: always
+sudo: required
+dist: xenial
+language: c
+compiler:
+  - gcc
+  #- clang
+addons:
+  apt:
+    update: true
+    packages:
+      - automake
+      - autoconf
+      - autoconf-archive
+      - pkg-config
+      - libglib2.0-dev
+      - libnss3-dev
+before_script:
+  - cd ..
+  - git clone https://gitlab.freedesktop.org/spice/libcacard.git
+  - cd libcacard && ./autogen.sh --prefix=/usr && make && sudo make install
+  - cd ../virt_cacard 
+script:
+  - ./autogen.sh && ./configure && make && make distcheck

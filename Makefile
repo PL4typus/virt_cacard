@@ -197,8 +197,8 @@ AUTOCONF = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/src/tests/virt_caca
 AUTOHEADER = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/src/tests/virt_cacard/build-aux/missing autoheader
 AUTOMAKE = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/src/tests/virt_cacard/build-aux/missing automake-1.16
 AWK = gawk
-CACARD_CFLAGS = -I/usr/local/include/cacard -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include -I/usr/include/nss3 -I/usr/include/nspr4 
-CACARD_LIBS = -L/usr/local/lib -lcacard -lglib-2.0 
+CACARD_CFLAGS = -I/usr/include/cacard -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include -I/usr/include/nss3 -I/usr/include/nspr4 
+CACARD_LIBS = -lcacard -lglib-2.0 
 CC = gcc
 CCDEPMODE = depmode=gcc3
 CFLAGS = -g -O2
@@ -285,8 +285,8 @@ top_build_prefix =
 top_builddir = .
 top_srcdir = .
 EXTRA_DIST = autogen.sh
-AM_CFLAGS = -g -Wall -O3 $(GLIB_CFLAGS) $(CACARD_CFLAGS)
-virt_cacard_SOURCES = src/virt_cacard.c src/connection.c src/connection.h
+AM_CFLAGS = -Wall $(GLIB_CFLAGS) $(CACARD_CFLAGS)
+virt_cacard_SOURCES = src/virt_cacard.c src/connection.c $(NULL) 
 virt_cacard_LDADD = $(AM_LDFLAGS) $(GLIB_LIBS) $(CACARD_LIBS)
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
