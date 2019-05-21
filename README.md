@@ -1,5 +1,5 @@
 # virt_cacard
-Virtual CAC using libcacard, virtualsmartcard's vpcd and softhsm2 to provide PCSC accessible virtual smart card.
+Virtual CAC using libcacard, virtualsmartcard's vpcd and softhsm2 to provide PCSC accessible virtual smart card. [![Build Status](https://travis-ci.org/PL4typus/virt_cacard.svg?branch=travis)](https://travis-ci.org/PL4typus/virt_cacard)
 ---
 ## How it works
 
