@@ -7,8 +7,8 @@ sudo: required
 dist: xenial
 language: c
 compiler:
-  - clang
   - gcc
+  #- clang
 addons:
   apt:
     update: true
