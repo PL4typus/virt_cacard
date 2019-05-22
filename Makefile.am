@@ -1,3 +1,4 @@
+MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
 EXTRA_DIST = autogen.sh setup-softhsm2.sh 
 
 AM_CFLAGS = -Wall 
