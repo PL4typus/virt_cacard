@@ -37,6 +37,7 @@
 *.x86_64
 *.hex
 exec
+virt_cacard
 
 # Debug files
 *.dSYM/
