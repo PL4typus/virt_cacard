@@ -1,5 +1,5 @@
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
-EXTRA_DIST = autogen.sh setup-softhsm2.sh 
+EXTRA_DIST = Makefile.mak autogen.sh setup-softhsm2.sh 
 
 AM_CFLAGS = -Wall 
 AM_CFLAGS += $(GLIB_CFLAGS)
