@@ -43,23 +43,23 @@ generate_cert() {
 }
 
 # Check requirements
-if [ ! -f $(which pkcs11-tool) ]; then
+if [ ! -f "$(which pkcs11-tool)" ]; then
 	echo "ERROR: Need 'opensc' package to run tests"
 	exit 1
 fi
-if [ ! -f $(which p11tool) -o ! -f $(which certtool) ]; then
+if [ ! -f "$(which p11tool)" -o ! -f "$(which certtool)" ]; then
 	echo "ERROR: Need 'gnutls-utils' package to run tests"
 	exit 1
 fi
-if [ ! -f $(which modutil) ]; then
+if [ ! -f "$(which modutil)" ]; then
 	echo "ERROR: Need 'nss-tools' package to run tests"
 	exit 1
 fi
-if [ ! -f $(which openssl) ]; then
+if [ ! -f "$(which openssl)" ]; then
 	echo "ERROR: Need 'openssl' package to run tests"
 	exit 1
 fi
-if [ ! -f $(which softhsm2-util) ]; then
+if [ ! -f "$(which softhsm2-util)" ]; then
 	echo "ERROR: Need 'softhsm' package to run tests"
 	exit 1
 fi
