@@ -7,7 +7,10 @@ SOPIN="77777777"
 PIN="12345678"
 export GNUTLS_PIN=$PIN
 
-P11LIB=/usr/lib64/pkcs11/libsofthsm2.so
+# for fedora:
+# P11LIB=/usr/lib64/pkcs11/libsofthsm2.so
+# For ubuntu Xenial (Travis);
+P11LIB=/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
 
 generate_cert() {
 	TYPE="$1"
