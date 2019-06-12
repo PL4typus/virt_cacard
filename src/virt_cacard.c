@@ -158,7 +158,8 @@ static VCardEmulError init_cacard(void)
     }
     else{
         printf("Init ok with options \"%s\"\n", args);
-        r = set_reader_name() ? vreader_get_reader_by_name(reader_name) : NULL;
+        if(set_reader_name()) 
+            r = vreader_get_reader_by_name(reader_name);
 
         if(r == NULL){
             printf("No readers with a card present. You may have forgotten to create soft token.\nIf you did, check if you have set SOFTHSM2_CONF env variable ?\n");
