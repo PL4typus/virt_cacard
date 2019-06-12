@@ -129,7 +129,7 @@ static gboolean set_reader_name(void){
             }
             rlentry = vreader_list_get_next(rlentry);
         }
-        vreader_free(r);
+        if (r != NULL) vreader_free(r);
         vreader_list_delete(relist);
     }
     return isSetname;
