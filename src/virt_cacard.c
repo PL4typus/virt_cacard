@@ -145,7 +145,7 @@ static VCardEmulError init_cacard(void)
     char *args = g_strdup_printf(ARGS,dbdir);
     VCardEmulOptions *command_line_options = NULL;
     VCardEmulError ret = VCARD_EMUL_FAIL;
-    VReader *r;
+    VReader *r = NULL;
 
     // Start the event thread
     thread = g_thread_new("tinker/events", events_thread, NULL);
