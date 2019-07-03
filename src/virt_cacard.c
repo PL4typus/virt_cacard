@@ -177,13 +177,13 @@ static VCardEmulError init_cacard(void)
 }
 
 
-void print_apdu(uint8_t *apdu, int length){
-    printf("APDU:\t");
-    for(int i = 0; i < length; i++){
-        printf("0x%x ", apdu[i]);
-    }
-    printf("\n");
-}
+//void print_apdu(uint8_t *apdu, int length){
+//    printf("APDU:\t");
+//    for(int i = 0; i < length; i++){
+//        printf("0x%x ", apdu[i]);
+//    }
+//    printf("\n");
+//}
 
 
 /**
@@ -284,7 +284,7 @@ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
         vreader_free(r); 
         return FALSE;
     }
-    print_apdu(receive_buff, receive_buf_len);
+//    print_apdu(receive_buff, receive_buf_len);
     //Format reply with the first two bytes for length and then the data:
     convert_byte_hex(&receive_buf_len, &part1, &part2, HEX2BYTES);
     g_byte_array_append(socket_to_send,&part1, 1);
@@ -373,49 +373,49 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     if(wasRead == 2){
         convert_byte_hex(&rcvLength, &buffer[0], &buffer[1], BYTES2HEX);
 
-        printf("rcvLength = %i\n wasRead = %li\n",rcvLength, wasRead);
+        g_debug("%s: rcvLength = = %i\n wasRead = %li\n", __func__, rcvLength, wasRead);
         g_io_channel_read_chars(source, (gchar *) buffer, rcvLength, &wasRead, &error);
-        printf("second part rcvLength = %i\n wasRead = %li\n",rcvLength, wasRead);
+        g_debug("%s: second part rcvLength = %i\n wasRead = %li\n", __func__, rcvLength, wasRead);
         if(wasRead == VPCD_CTRL_LEN){
             int code = buffer[0];
-            printf("received ctrl code: %i\n",code);
+            g_debug("%s: received ctrl code: %i\n", __func__, code);
             switch(code){
                 case VPCD_CTRL_ON:
                     //TODO POWER ON
-                    printf("Power on requested by vpcd\n");
-                    printf("Powering up card\n");
+                    g_debug("%s: Power on requested by vpcd\n", __func__);
+                    g_debug("%s: Powering up card\n", __func__);
                     poweredOff = !make_reply_poweron();
                     break;
                 case VPCD_CTRL_OFF:
                     //TODO POWER OFF
-                    printf("Power off requested by vpcd\n");
-                    printf("powered off card\n");
+                    g_debug("%s: Power off requested by vpcd\n", __func__);
+                    g_debug("%s: Powered off card\n", __func__);
                     poweredOff = make_reply_poweroff();
                     break;
                 case VPCD_CTRL_RESET:
                     //TODO RESET
-                    printf("Reset requested by vpcd\n");
+                    g_debug("%s: Reset requested by vpcd\n", __func__);
                     break;
                 case VPCD_CTRL_ATR:
-                    printf("ATR requested by vpcd\n");
+                    g_debug("%s: ATR requested by vpcd\n", __func__);
                     if(make_reply_atr()){
-                        printf(" card answered to reset\n");
+                        g_debug("%s: card answered to reset\n", __func__);
                         isOk = TRUE;
                     }else{
-                        printf("Failed to get ATR\n");
+                        g_debug("%s: Failed to get ATR\n", __func__);
                     }
                     break;
                 default:
-                    printf("Non recognized code\n");
+                    g_debug("%s: Non recognized code\n", __func__);
             }
         }else{
-            printf("Received APDU of size %i:\n",rcvLength);
-            print_apdu(buffer, rcvLength);
+            g_debug("%s: Received APDU of size %i:\n", __func__, rcvLength);
+//            print_apdu(buffer, rcvLength);
             if(make_reply_apdu(buffer, rcvLength)){
-                printf(" card answered to APDU\n");
+                g_debug("%s: card answered to APDU\n", __func__);
                 isOk = TRUE;
             }else{
-                printf("Failed to answer to APDU\n");
+                g_debug("%s: Failed to answer to APDU\n", __func__);
             }
         }
     }else if( wasRead == 0){
