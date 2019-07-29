@@ -1,0 +1,3 @@
+[submodule "vpcd_selinux"]
+	path = vpcd_selinux
+	url = git@github.com:PL4typus/vpcd_selinux.git
