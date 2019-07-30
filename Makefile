@@ -88,7 +88,7 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = x86_64-pc-linux-gnu
 host_triplet = x86_64-pc-linux-gnu
-bin_PROGRAMS = virt_cacard$(EXEEXT)
+noinst_PROGRAMS = virt_cacard$(EXEEXT)
 subdir = src/tests/virt_cacard
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ax_check_compile_flag.m4 \
@@ -104,8 +104,7 @@ mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
-am__installdirs = "$(DESTDIR)$(bindir)"
-PROGRAMS = $(bin_PROGRAMS)
+PROGRAMS = $(noinst_PROGRAMS)
 am_virt_cacard_OBJECTS = virt_cacard.$(OBJEXT) connection.$(OBJEXT)
 virt_cacard_OBJECTS = $(am_virt_cacard_OBJECTS)
 am__DEPENDENCIES_1 =
@@ -178,14 +177,14 @@ ETAGS = etags
 CTAGS = ctags
 am__DIST_COMMON = $(srcdir)/Makefile.in $(top_srcdir)/depcomp
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
-ACLOCAL = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/missing aclocal-1.16
+ACLOCAL = ${SHELL} /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC/missing aclocal-1.16
 AMTAR = $${TAR-tar}
 AM_DEFAULT_VERBOSITY = 0
 AR = ar
 AS = as
-AUTOCONF = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/missing autoconf
-AUTOHEADER = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/missing autoheader
-AUTOMAKE = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/missing automake-1.16
+AUTOCONF = ${SHELL} /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC/missing autoconf
+AUTOHEADER = ${SHELL} /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC/missing autoheader
+AUTOMAKE = ${SHELL} /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC/missing automake-1.16
 AWK = gawk
 BASH_COMPLETION_CFLAGS = 
 BASH_COMPLETION_LIBS = 
@@ -194,6 +193,7 @@ CACARD_LIBS = -lcacard -lglib-2.0
 CC = gcc
 CCDEPMODE = depmode=gcc3
 CFLAGS = -g -O2
+CLANGTIDY = not found
 CMOCKA_CFLAGS = 
 CMOCKA_LIBS = -lcmocka 
 CPP = gcc -E
@@ -246,7 +246,7 @@ LIPO =
 LN_S = ln -s
 LTLIBOBJS = 
 LT_SYS_LIBRARY_PATH = 
-MAKEINFO = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/missing makeinfo
+MAKEINFO = ${SHELL} /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC/missing makeinfo
 MANIFEST_TOOL = :
 MKDIR_P = /usr/bin/mkdir -p
 NM = /usr/bin/nm -B
@@ -265,11 +265,11 @@ OPENSC_LT_CURRENT = 6
 OPENSC_LT_OLDEST = 6
 OPENSC_LT_REVISION = 0
 OPENSC_PKCS11_PTHREAD_CFLAGS = -pthread -DPKCS11_THREAD_LOCKING
-OPENSC_SCM_REVISION = OpenSC-0.19.0-415-g2e92454b, rev: 2e92454b, commit-time: 2019-05-22 18:34:44 +0200
+OPENSC_SCM_REVISION = OpenSC-0.19.0-473-gc58645a3, rev: c58645a3, commit-time: 2019-07-30 14:47:30 +0200
 OPENSC_VERSION_FIX = 0
 OPENSC_VERSION_MAJOR = 0
 OPENSC_VERSION_MINOR = 19
-OPENSC_VERSION_REVISION = 415
+OPENSC_VERSION_REVISION = 473
 OPENSC_VS_FF_COMMENTS = Provided under the terms of the GNU Lesser General Public License (LGPLv2.1+).
 OPENSC_VS_FF_COMPANY_NAME = OpenSC Project
 OPENSC_VS_FF_COMPANY_URL = https://github.com/OpenSC
@@ -324,10 +324,10 @@ X509DIR =
 XSLTPROC = xsltproc
 ZLIB_CFLAGS = 
 ZLIB_LIBS = -lz
-abs_builddir = /home/ppalant/Documents/crypto-83/OpenSC/src/tests/virt_cacard
-abs_srcdir = /home/ppalant/Documents/crypto-83/OpenSC/src/tests/virt_cacard
-abs_top_builddir = /home/ppalant/Documents/crypto-83/OpenSC
-abs_top_srcdir = /home/ppalant/Documents/crypto-83/OpenSC
+abs_builddir = /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC/src/tests/virt_cacard
+abs_srcdir = /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC/src/tests/virt_cacard
+abs_top_builddir = /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC
+abs_top_srcdir = /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC
 ac_ct_AR = ar
 ac_ct_CC = gcc
 ac_ct_CXX = g++
@@ -361,7 +361,7 @@ host_vendor = pc
 htmldir = ${docdir}
 includedir = ${prefix}/include
 infodir = ${datarootdir}/info
-install_sh = ${SHELL} /home/ppalant/Documents/crypto-83/OpenSC/install-sh
+install_sh = ${SHELL} /home/ppalant/Documents/crypto-83/cicd/integration/OpenSC/install-sh
 libdir = ${exec_prefix}/lib
 libexecdir = ${exec_prefix}/libexec
 localedir = ${datarootdir}/locale
@@ -384,7 +384,7 @@ top_builddir = ../../..
 top_srcdir = ../../..
 xslstylesheetsdir = no
 MAINTAINERCLEANFILES = $(srcdir)/Makefile.in
-EXTRA_DIST = autogen.sh setup-softhsm2.sh 
+EXTRA_DIST = setup-softhsm2.sh 
 AM_CFLAGS = -Wall $(GLIB_CFLAGS) $(CACARD_CFLAGS)
 virt_cacard_SOURCES = src/virt_cacard.c src/connection.c src/connection.h src/glib-compat.h $(NULL) 
 virt_cacard_LDADD = $(AM_LDFLAGS) $(GLIB_LIBS) $(CACARD_LIBS)
@@ -421,49 +421,9 @@ $(top_srcdir)/configure:  $(am__configure_deps)
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
-install-binPROGRAMS: $(bin_PROGRAMS)
-	@$(NORMAL_INSTALL)
-	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
-	if test -n "$$list"; then \
-	  echo " $(MKDIR_P) '$(DESTDIR)$(bindir)'"; \
-	  $(MKDIR_P) "$(DESTDIR)$(bindir)" || exit 1; \
-	fi; \
-	for p in $$list; do echo "$$p $$p"; done | \
-	sed 's/$(EXEEXT)$$//' | \
-	while read p p1; do if test -f $$p \
-	 || test -f $$p1 \
-	  ; then echo "$$p"; echo "$$p"; else :; fi; \
-	done | \
-	sed -e 'p;s,.*/,,;n;h' \
-	    -e 's|.*|.|' \
-	    -e 'p;x;s,.*/,,;s/$(EXEEXT)$$//;$(transform);s/$$/$(EXEEXT)/' | \
-	sed 'N;N;N;s,\n, ,g' | \
-	$(AWK) 'BEGIN { files["."] = ""; dirs["."] = 1 } \
-	  { d=$$3; if (dirs[d] != 1) { print "d", d; dirs[d] = 1 } \
-	    if ($$2 == $$4) files[d] = files[d] " " $$1; \
-	    else { print "f", $$3 "/" $$4, $$1; } } \
-	  END { for (d in files) print "f", d, files[d] }' | \
-	while read type dir files; do \
-	    if test "$$dir" = .; then dir=; else dir=/$$dir; fi; \
-	    test -z "$$files" || { \
-	    echo " $(INSTALL_PROGRAM_ENV) $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL_PROGRAM) $$files '$(DESTDIR)$(bindir)$$dir'"; \
-	    $(INSTALL_PROGRAM_ENV) $(LIBTOOL) $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=install $(INSTALL_PROGRAM) $$files "$(DESTDIR)$(bindir)$$dir" || exit $$?; \
-	    } \
-	; done
 
-uninstall-binPROGRAMS:
-	@$(NORMAL_UNINSTALL)
-	@list='$(bin_PROGRAMS)'; test -n "$(bindir)" || list=; \
-	files=`for p in $$list; do echo "$$p"; done | \
-	  sed -e 'h;s,^.*/,,;s/$(EXEEXT)$$//;$(transform)' \
-	      -e 's/$$/$(EXEEXT)/' \
-	`; \
-	test -n "$$list" || exit 0; \
-	echo " ( cd '$(DESTDIR)$(bindir)' && rm -f" $$files ")"; \
-	cd "$(DESTDIR)$(bindir)" && rm -f $$files
-
-clean-binPROGRAMS:
-	@list='$(bin_PROGRAMS)'; test -n "$$list" || exit 0; \
+clean-noinstPROGRAMS:
+	@list='$(noinst_PROGRAMS)'; test -n "$$list" || exit 0; \
 	echo " rm -f" $$list; \
 	rm -f $$list || exit $$?; \
 	test -n "$(EXEEXT)" || exit 0; \
@@ -634,9 +594,6 @@ check-am: all-am
 check: check-am
 all-am: Makefile $(PROGRAMS)
 installdirs:
-	for dir in "$(DESTDIR)$(bindir)"; do \
-	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
-	done
 install: install-am
 install-exec: install-exec-am
 install-data: install-data-am
@@ -670,7 +627,8 @@ maintainer-clean-generic:
 	-test -z "$(MAINTAINERCLEANFILES)" || rm -f $(MAINTAINERCLEANFILES)
 clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-generic clean-libtool mostlyclean-am
+clean-am: clean-generic clean-libtool clean-noinstPROGRAMS \
+	mostlyclean-am
 
 distclean: distclean-am
 		-rm -f ./$(DEPDIR)/connection.Po
@@ -697,7 +655,7 @@ install-dvi: install-dvi-am
 
 install-dvi-am:
 
-install-exec-am: install-binPROGRAMS
+install-exec-am:
 
 install-html: install-html-am
 
@@ -738,23 +696,23 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-binPROGRAMS
+uninstall-am:
 
 .MAKE: install-am install-strip
 
 .PHONY: CTAGS GTAGS TAGS all all-am am--depfiles check check-am clean \
-	clean-binPROGRAMS clean-generic clean-libtool cscopelist-am \
+	clean-generic clean-libtool clean-noinstPROGRAMS cscopelist-am \
 	ctags ctags-am distclean distclean-compile distclean-generic \
 	distclean-libtool distclean-tags distdir dvi dvi-am html \
-	html-am info info-am install install-am install-binPROGRAMS \
-	install-data install-data-am install-dvi install-dvi-am \
-	install-exec install-exec-am install-html install-html-am \
-	install-info install-info-am install-man install-pdf \
-	install-pdf-am install-ps install-ps-am install-strip \
-	installcheck installcheck-am installdirs maintainer-clean \
+	html-am info info-am install install-am install-data \
+	install-data-am install-dvi install-dvi-am install-exec \
+	install-exec-am install-html install-html-am install-info \
+	install-info-am install-man install-pdf install-pdf-am \
+	install-ps install-ps-am install-strip installcheck \
+	installcheck-am installdirs maintainer-clean \
 	maintainer-clean-generic mostlyclean mostlyclean-compile \
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	tags tags-am uninstall uninstall-am uninstall-binPROGRAMS
+	tags tags-am uninstall uninstall-am
 
 .PRECIOUS: Makefile
 
