@@ -115,7 +115,7 @@ static gpointer events_thread(gpointer data)
 static gboolean set_reader_name(void){
     VReaderList *relist = vreader_get_reader_list();
     VReaderListEntry *rlentry;
-    VReader *r;
+    VReader *r = NULL;
     gboolean isSetname = FALSE;
 
     if(relist != NULL){
@@ -383,14 +383,14 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
                 case VPCD_CTRL_ON:
                     //TODO POWER ON
                     g_debug("%s: Power on requested by vpcd\n", __func__);
-                    g_debug("%s: Powering up card\n", __func__);
                     poweredOff = !make_reply_poweron();
+                    if (!poweredOff) g_debug("%s: Powered up card\n", __func__);
                     break;
                 case VPCD_CTRL_OFF:
                     //TODO POWER OFF
                     g_debug("%s: Power off requested by vpcd\n", __func__);
-                    g_debug("%s: Powered off card\n", __func__);
                     poweredOff = make_reply_poweroff();
+                    if (poweredOff) g_debug("%s: Powered off card\n", __func__);
                     break;
                 case VPCD_CTRL_RESET:
                     //TODO RESET
