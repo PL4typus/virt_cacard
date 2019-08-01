@@ -85,7 +85,7 @@ if [ ! -d "tokens" ]; then
 	# Init token
 	softhsm2-util --init-token --slot 0 --label "SC test" --so-pin="$SOPIN" --pin="$PIN"
 
-	# Generate 1024b RSA Key pair
+	# Generate 2048b RSA Key trio
 	generate_cert "RSA:2048" "01" "RSA_id"
 	generate_cert "RSA:2048" "02" "RSA_sign"
 	generate_cert "RSA:2048" "03" "RSA_encryption"
@@ -93,7 +93,8 @@ fi
 # NSS DB
 if [ ! -d "$NSSDB" ]; then
 	mkdir "$NSSDB"
+        # Do not add a softhsm2 to the nssdb if there is already p11-kit-proxy
         modutil -create -dbdir "sql:$NSSDB" -force
-# Skipping that line thanks to last NSS changes
-#	modutil -add "SoftHSM PKCS#11" -dbdir "sql:$NSSDB" -libfile "$P11LIB" -force
+        modutil -list -dbdir "sql:$NSSDB" | grep "library name: p11-kit-proxy.so" ||\
+        	modutil -add "SoftHSM PKCS#11" -dbdir "sql:$NSSDB" -libfile "$P11LIB" -force
 fi
