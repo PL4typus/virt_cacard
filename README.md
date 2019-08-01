@@ -16,8 +16,21 @@ The virtual smart card, emulated with [libcacard](https://gitlab.freedesktop.org
 OpenSC tests:                    [![virt_cacard](https://gitlab.com/PL4typus/OpenSC/badges/virt_cacard/pipeline.svg)](https://gitlab.com/PL4typus/OpenSC/pipelines) 
 
 ---
-## How to build
+## How to build virt_cacard
+
+At the time of writing, I recommend building from OpenSC as it is the most up to date and tested version.
+
+### How to build from OpenSC (*integration* branch only)
+
+    ./bootstrap
+    ./configure --enable-virt_cacard
+    make -j4 && make check
+
+---
+### Standalone build (*current* branch only)
 
     ./autogen.sh
     ./configure
     make
+    
+ 
