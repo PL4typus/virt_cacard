@@ -466,7 +466,7 @@ int main(int argc, char* argv[])
     /* Adding watches to the channel.*/
     socket_tag_read = g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL);
     if(!socket_tag_read)
-        g_error("Error creating send watch\n");
+        g_error("Error creating read watch\n");
 
     socket_tag_send = g_io_add_watch(channel_socket, G_IO_OUT | G_IO_HUP, do_socket_send, NULL);
     if(!socket_tag_send) 
