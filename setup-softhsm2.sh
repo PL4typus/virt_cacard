@@ -86,8 +86,9 @@ if [ ! -d "tokens" ]; then
 	softhsm2-util --init-token --slot 0 --label "SC test" --so-pin="$SOPIN" --pin="$PIN"
 
 	# Generate 1024b RSA Key pair
-	generate_cert "RSA:1024" "01" "RSA_auth"
-	generate_cert "RSA:1024" "02" "RSA_sign"
+	generate_cert "RSA:2048" "01" "RSA_id"
+	generate_cert "RSA:2048" "02" "RSA_sign"
+	generate_cert "RSA:2048" "03" "RSA_encryption"
 fi
 # NSS DB
 if [ ! -d "$NSSDB" ]; then
