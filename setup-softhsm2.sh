@@ -7,12 +7,27 @@ SOPIN="77777777"
 PIN="12345678"
 export GNUTLS_PIN=$PIN
 
-# for fedora:
-P11LIB=/usr/lib64/pkcs11/libsofthsm2.so
-# For ubuntu Xenial (Travis);
-#P11LIB=/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so
-# For Ubuntu 18.04-LTS and Debian-testing:
-#P11LIB=/usr/lib/softhsm/libsofthsm2.so
+
+# Detect the softhsm2 library path
+tid="pkcs11 agent test"
+
+try_token_libs() {
+	for _lib in "$@" ; do
+		if test -f "$_lib" ; then
+			echo "Using token library $_lib"
+			P11LIB="$_lib"
+			return
+		fi
+	done
+	echo "skipped: Unable to find PKCS#11 token library"
+	exit 0
+}
+
+try_token_libs \
+	/usr/local/lib/softhsm/libsofthsm2.so \
+	/usr/lib64/pkcs11/libsofthsm2.so \
+	/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so\
+        /usr/lib/softhsm/libsofthsm2.so
 
 generate_cert() {
 	TYPE="$1"
