@@ -53,7 +53,7 @@ static guint socket_tag_read, socket_tag_send ;
 /** 
  **  the reader name is automatically detected 
  **/
-static const char* reader_name; 
+static const char* reader_name;
 static const char hostname[] = "127.0.0.1";
 
 static gpointer events_thread(gpointer data)
@@ -74,7 +74,7 @@ static gpointer events_thread(gpointer data)
             break;
         }
         reader_id = vreader_get_id(event->reader);
-        if (reader_id == VSCARD_UNDEFINED_READER_ID) 
+        if (reader_id == VSCARD_UNDEFINED_READER_ID)
         {
             g_mutex_lock(&mutex);
             vreader_set_id(event->reader, nreaders++);
@@ -82,10 +82,10 @@ static gpointer events_thread(gpointer data)
             g_mutex_unlock(&mutex);
             reader_id = vreader_get_id(event->reader);
         }
-        switch (event->type) 
+        switch (event->type)
         {
             case VEVENT_READER_INSERT:
-                printf("REMOVE card \tReader name: %s\n", vreader_get_name(event->reader));
+                printf("INSERT card \tReader name: %s\n", vreader_get_name(event->reader));
                 break;
             case VEVENT_READER_REMOVE:
                 printf("REMOVE reader\n\n\n\n");
@@ -122,7 +122,7 @@ static gboolean set_reader_name(void){
         rlentry = vreader_list_get_first(relist);
         while(rlentry != NULL){
             r = vreader_list_get_reader(rlentry);
-            if(vreader_card_is_present(r) != VREADER_NO_CARD){ 
+            if(vreader_card_is_present(r) != VREADER_NO_CARD){
                 reader_name = vreader_get_name(r);
                 isSetname = (reader_name!=NULL) ? TRUE : FALSE;
                 break;
@@ -158,7 +158,7 @@ static VCardEmulError init_cacard(void)
     }
     else{
         printf("Init ok with options \"%s\"\n", args);
-        if(set_reader_name()) 
+        if(set_reader_name())
             r = vreader_get_reader_by_name(reader_name);
 
         if(r == NULL){
@@ -261,14 +261,16 @@ gboolean make_reply_poweron(void){
     return TRUE;
 }
 /**
- * Responds to apdu. Format the reponse made by libcacard according to 
+ * Responds to apdu. Format the reponse made by libcacard according to
  * vpcd's protocol
  **/
-gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
+gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len)
+{
     int receive_buf_len = APDUBufSize;
     uint8_t part1, part2, receive_buff[APDUBufSize];
-    VReaderStatus status; 
-    /* get by name ref */  
+    VReaderStatus status;
+
+    /* get by name ref */
     VReader *r = vreader_get_reader_by_name(reader_name);
     g_mutex_lock(&socket_to_send_lock);
 
@@ -311,18 +313,20 @@ gboolean make_reply_atr(void){
         g_mutex_unlock(&socket_to_send_lock);
         return isSent;
     }
+
     int atr_length = MAX_ATR_LEN;
     atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
     
     vcard_emul_get_atr(NULL, atr, &atr_length);
     reply = calloc(atr_length+2,sizeof(uint8_t));
     //Format reply with the first two bytes for length and then the data:
-    convert_byte_hex(&atr_length, &reply[0], &reply[1],HEX2BYTES);
-    for(int i = 0; i < atr_length; i++){
-        reply[i+2] = atr[i];
+    convert_byte_hex(&atr_length, &reply[0], &reply[1], HEX2BYTES);
+
+    for (int i = 0; i < atr_length; i++) {
+        reply[i + 2] = atr[i];
     }
-    g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
-    g_byte_array_append(socket_to_send, reply, atr_length+2);
+    g_byte_array_remove_range(socket_to_send, 0, socket_to_send->len);
+    g_byte_array_append(socket_to_send, reply, atr_length + 2);
     isSent = do_socket_send(channel_socket, G_IO_OUT, NULL);
     g_mutex_unlock(&socket_to_send_lock);
     free(atr);
@@ -332,9 +336,9 @@ gboolean make_reply_atr(void){
 }
 
 
-/** vpcd communicates over a socked with vpicc usually on port 0x8C7B 
- *  (configurably via /etc/reader.conf.d/vpcd). 
- *  So you can connect virtually any program to the virtual smart card reader, 
+/** vpcd communicates over a socked with vpicc usually on port 0x8C7B
+ *  (configurably via /etc/reader.conf.d/vpcd).
+ *  So you can connect virtually any program to the virtual smart card reader,
  *  as long as you respect the following protocol:
  _____________________________________________________________
  |    vpcd                      |     vpicc                    |
@@ -363,7 +367,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
 
     if (condition & G_IO_HUP)
         g_error ("Write end of pipe died!\n");
-    g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error); 
+    g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error);
     if (error != NULL){
         g_error("error while reading: %s", error->message);
         free(buffer);
