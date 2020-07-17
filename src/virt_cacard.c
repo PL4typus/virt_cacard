@@ -50,7 +50,7 @@ static GIOChannel *channel_socket;
 static GByteArray *socket_to_send;
 static CompatGMutex socket_to_send_lock;
 
-static guint socket_tag_read, socket_tag_send ;
+static guint socket_tag_read;
 
 static GMutex insert_mutex;
 static gboolean inserted = FALSE;
@@ -385,8 +385,10 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     gboolean isOk = TRUE;
     static gboolean poweredOff = FALSE;
 
-    if (condition & G_IO_HUP)
+    if (condition & G_IO_HUP) {
         g_error ("Write end of pipe died!\n");
+        return FALSE;
+    }
     g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error);
     if (error != NULL){
         g_error("error while reading: %s", error->message);
@@ -455,8 +457,6 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
 
 void connect_vcpd(void)
 {
-    SOCKET sock;
-
     sock = connectsock(hostname,port);
 
     if (sock == -1){
@@ -471,17 +471,13 @@ void connect_vcpd(void)
     socket_tag_read = g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL);
     if (!socket_tag_read)
         g_error("Error creating read watch\n");
-
-    socket_tag_send = g_io_add_watch(channel_socket, G_IO_OUT | G_IO_HUP, do_socket_send, NULL);
-    if (!socket_tag_send)
-        g_error("Error creating send watch\n");
-
 }
 
 void disconnect_vpcd() {
     g_io_channel_shutdown(channel_socket, TRUE, NULL);
     g_io_channel_unref(channel_socket);
     closesocket(sock);
+    sock = -1;
 }
 
 void signal_remove(int sig)
@@ -556,6 +552,7 @@ int main(int argc, char* argv[])
         action_insert = FALSE;
         g_debug("%s: Handling insert event. Inserting card.", __func__);
         vcard_emul_force_card_insert(r);
+        vreader_free(r);
 
         /* Now, reconnect to VPCD and fall back to the main loop */
         connect_vcpd();
@@ -567,6 +564,7 @@ int main(int argc, char* argv[])
     printf("*******\tCleaning up\t*******\n\n");
 
     /* This probably supposed to be a event that terminates the loop */
+    r = vreader_get_reader_by_name(reader_name);
     vevent_queue_vevent(vevent_new(VEVENT_LAST, r, NULL));
 
     /* join */
