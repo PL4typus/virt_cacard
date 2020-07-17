@@ -21,7 +21,54 @@ OpenSC tests:                    [![virt_cacard](https://gitlab.com/PL4typus/Ope
     ./autogen.sh
     ./configure
     make
-    
+
+
+# Usage
+
+The fastest way to start is to install virtualsmartcard's module
+vpcd for pcscd (see above), configure softhsm with default certificates
+and start `virt_cacard`:
+
+    $ . setup-softhsm2.sh
+    $ ./virt_cacard
+
+After that, you should be able to access virtual smart card through OpenSC:
+
+    $ pkcs11-tool -L
+    Available slots:
+    Slot 0 (0x0): Virtual PCD 00 00
+      token label        : CAC II
+      token manufacturer : Common Access Card
+      token model        : PKCS#15 emulated
+      token flags        : login required, rng, token initialized, PIN initialized
+      hardware version   : 0.0
+      firmware version   : 0.0
+      serial num         : 000058bd002c19b5
+      pin min/max        : 4/8
+    Slot 1 (0x4): Virtual PCD 00 01
+      (empty)
+    Slot 2 (0x8): Virtual PCD 00 02
+      (empty)
+    Slot 3 (0xc): Virtual PCD 00 03
+      (empty)
+
+If you use Fedora or RHEL, make sure to configure p11-kit to not load OpenSC
+for `virt_cacard`:
+
+   # echo "disable-in: virt_cacard" >> /usr/share/p11-kit/modules/opensc.module
+
+otherwise the above command will hang (recursive access to pcscd).
+
+The virtual smart card is automatically started in inserted state. To simulate
+smart card removal and insertion events, you can either kill the `virt_cacard`
+process or send SIGUSR1 to remove the card and SIGUSR2 to reinsert the card again.
+
+This can be done by running `virt_cacard` with `-r` switch to remove card and
+`-i` to insert card back again. This will automatically send signals to all
+`virt_cacard` processes in the system. If you want to limit which process should
+be used (if there are multiple virtual smart cards or `virt_cacard` runs under
+valgrind), you can use `-p` switch to specify PID.
+
 ## Debugging
 
 to get debug logs from running `virt_cacard`, set `G_MESSAGES_DEBUG=virt_cacard`
