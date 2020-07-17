@@ -169,6 +169,7 @@ static VCardEmulError init_cacard(void)
             g_mutex_lock(&mutex);
             while (nreaders <= 1)
                 g_cond_wait(&cond, &mutex);
+            g_mutex_unlock(&mutex);
         }
     }
     g_free(args);
