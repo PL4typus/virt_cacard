@@ -44,17 +44,24 @@ static GThread *thread;
 static guint nreaders;
 static GMutex mutex;
 static GCond cond;
+static GCond insert_cond;
+static SOCKET sock;
 static GIOChannel *channel_socket;
 static GByteArray *socket_to_send;
 static CompatGMutex socket_to_send_lock;
 
 static guint socket_tag_read, socket_tag_send ;
 
-/** 
- **  the reader name is automatically detected 
+static GMutex insert_mutex;
+static gboolean inserted = FALSE;
+static gboolean action_insert = FALSE, action_remove = FALSE;
+
+/**
+ **  the reader name is automatically detected
  **/
 static const char* reader_name;
 static const char hostname[] = "127.0.0.1";
+static uint16_t port = VPCDPORT;
 
 static gpointer events_thread(gpointer data)
 {
@@ -170,6 +177,10 @@ static VCardEmulError init_cacard(void)
             while (nreaders <= 1)
                 g_cond_wait(&cond, &mutex);
             g_mutex_unlock(&mutex);
+
+            g_mutex_lock(&insert_mutex);
+            inserted = TRUE;
+            g_mutex_unlock(&insert_mutex);
         }
     }
     g_free(args);
@@ -276,18 +287,18 @@ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len)
     g_mutex_lock(&socket_to_send_lock);
 
     g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
-    if (r != NULL){
-        status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
-    }else{
+    if (r == NULL) {
         printf("Error getting reader\n");
         return FALSE;
     }
-    if(status != VREADER_OK){
+    status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
+    if (status == VREADER_OK) {
+        //print_apdu(receive_buff, receive_buf_len);
+    } else {
+        /* We need to reply anyway */
         printf("xfr apdu failed\n");
-        vreader_free(r); 
-        return FALSE;
+        receive_buf_len = 0;
     }
-//    print_apdu(receive_buff, receive_buf_len);
     //Format reply with the first two bytes for length and then the data:
     convert_byte_hex(&receive_buf_len, &part1, &part2, HEX2BYTES);
     g_byte_array_append(socket_to_send,&part1, 1);
@@ -305,7 +316,7 @@ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len)
  **/
 gboolean make_reply_atr(void){
     g_mutex_lock(&socket_to_send_lock);
-    uint8_t *atr;
+    uint8_t *atr = NULL;
     uint8_t *reply;
     gboolean isSent = FALSE;
     VReader *r = vreader_get_reader_by_name(reader_name);
@@ -316,10 +327,16 @@ gboolean make_reply_atr(void){
     }
 
     int atr_length = MAX_ATR_LEN;
-    atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
-    
-    vcard_emul_get_atr(NULL, atr, &atr_length);
-    reply = calloc(atr_length+2,sizeof(uint8_t));
+    if (vreader_card_is_present(r) == VREADER_OK) {
+        atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
+        vcard_emul_get_atr(NULL, atr, &atr_length);
+    } else {
+        /* Card was removed -- we can not return ATR now :)
+         * just send empty ATR ? */
+        atr_length = 0;
+    }
+    reply = calloc(atr_length + 2, sizeof(uint8_t));
+
     //Format reply with the first two bytes for length and then the data:
     convert_byte_hex(&atr_length, &reply[0], &reply[1], HEX2BYTES);
 
@@ -354,6 +371,8 @@ gboolean make_reply_atr(void){
 
  *  The communication is initiated by vpcd. First the length of the data (in network byte order,
  *  i.e. big endian) is sent followed by the data itself.
+ *
+ *  http://frankmorgner.github.io/vsmartcard/virtualsmartcard/api.html
  **/
 
 static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpointer data)
@@ -434,14 +453,64 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     return isOk;
 }
 
+void connect_vcpd(void)
+{
+    SOCKET sock;
+
+    sock = connectsock(hostname,port);
+
+    if (sock == -1){
+        g_error("Error creating read watch\n");
+    }
+
+    channel_socket = g_io_channel_unix_new(sock);
+    g_io_channel_set_encoding(channel_socket, NULL, NULL);
+    g_io_channel_set_buffered(channel_socket, FALSE);
+
+    /* Adding watches to the channel.*/
+    socket_tag_read = g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL);
+    if (!socket_tag_read)
+        g_error("Error creating read watch\n");
+
+    socket_tag_send = g_io_add_watch(channel_socket, G_IO_OUT | G_IO_HUP, do_socket_send, NULL);
+    if (!socket_tag_send)
+        g_error("Error creating send watch\n");
+
+}
+
+void disconnect_vpcd() {
+    g_io_channel_shutdown(channel_socket, TRUE, NULL);
+    g_io_channel_unref(channel_socket);
+    closesocket(sock);
+}
+
+void signal_remove(int sig)
+{
+    /* Can not use locks in signal handler so just hope */
+    if (inserted) {
+        g_debug("%s: Received removal event.", __func__);
+        action_remove = TRUE;
+        /* terminate main loop -- card was physically disconnected.
+         * This can happen anytime without synchronization needed */
+        g_main_loop_quit(loop);
+    }
+}
+
+void signal_insert(int sig)
+{
+    /* Can not use locks in signal handler so just hope */
+    if (!inserted) {
+        g_debug("%s: Received insert event.", __func__);
+        action_insert = TRUE;
+        g_cond_signal(&insert_cond);
+    }
+}
 
 int main(int argc, char* argv[])
 {
     VReader *r = NULL;
     VCardEmulError ret;
     int code = 0;
-    SOCKET sock;
-    uint16_t port = VPCDPORT;
     socket_to_send = g_byte_array_new();
 
     loop = g_main_loop_new(NULL, TRUE);
@@ -457,33 +526,45 @@ int main(int argc, char* argv[])
      **************** CONNECTION TO VPCD *******************
      **/
     /* Connecting to VPCD and creating an IO channel to manage the socket */
-    sock = connectsock(hostname,port);
-    
-    if(sock == -1){
-        printf("Connect sock error\n");
-        return EXIT_FAILURE;
+    connect_vcpd();
+
+    /* Handle insert/removal signals */
+    signal(SIGUSR1, signal_remove);
+    signal(SIGUSR2, signal_insert);
+
+    while (1) {
+        g_main_loop_run(loop); //explicit
+
+        /* We dropped out of the main loop.
+         * This means the card was disconnected so cleanup sockets and
+         * prepare for connecting the card again */
+        g_debug("%s: Handling removal event. Removing card.", __func__);
+        r = vreader_get_reader_by_name(reader_name);
+        vcard_emul_force_card_remove(r);
+        inserted = FALSE;
+
+        /* If the card is removed, we will get disconnected from vpcd */
+        disconnect_vpcd();
+
+        /* Wait for signal announcing card insertion */
+        g_mutex_lock(&insert_mutex);
+        while (!action_insert)
+            g_cond_wait(&insert_cond, &insert_mutex);
+        g_mutex_unlock(&insert_mutex);
+
+        inserted = TRUE;
+        action_insert = FALSE;
+        g_debug("%s: Handling insert event. Inserting card.", __func__);
+        vcard_emul_force_card_insert(r);
+
+        /* Now, reconnect to VPCD and fall back to the main loop */
+        connect_vcpd();
     }
-
-    channel_socket = g_io_channel_unix_new(sock);
-    g_io_channel_set_encoding(channel_socket, NULL, NULL);
-    g_io_channel_set_buffered(channel_socket, FALSE);
-
-    /* Adding watches to the channel.*/
-    socket_tag_read = g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL);
-    if(!socket_tag_read)
-        g_error("Error creating read watch\n");
-
-    socket_tag_send = g_io_add_watch(channel_socket, G_IO_OUT | G_IO_HUP, do_socket_send, NULL);
-    if(!socket_tag_send) 
-        g_error("Error creating send watch\n");
-
-    g_main_loop_run(loop); //explicit
 
     /**
      **************** CLEAN UP  ******************
      **/
     printf("*******\tCleaning up\t*******\n\n");
-    r = vreader_get_reader_by_name(reader_name);
 
     /* This probably supposed to be a event that terminates the loop */
     vevent_queue_vevent(vevent_new(VEVENT_LAST, r, NULL));
@@ -495,9 +576,7 @@ int main(int argc, char* argv[])
     if (r) /*if /remove didn't run */
         vreader_free(r);
 
-    g_io_channel_shutdown(channel_socket, TRUE, NULL);
-    g_io_channel_unref(channel_socket);
-    closesocket(sock);
+    disconnect_vpcd();
     g_main_loop_unref(loop);
     g_byte_array_free(socket_to_send, TRUE);
 
