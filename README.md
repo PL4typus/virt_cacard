@@ -22,4 +22,11 @@ OpenSC tests:                    [![virt_cacard](https://gitlab.com/PL4typus/Ope
     ./configure
     make
     
- 
+## Debugging
+
+to get debug logs from running `virt_cacard`, set `G_MESSAGES_DEBUG=virt_cacard`
+environment variable for the process, for example:
+
+    G_MESSAGES_DEBUG=virt_cacard ./virt_cacard
+
+To get debug logs from `libcacard`, use the same variable with `libcacard` value.
