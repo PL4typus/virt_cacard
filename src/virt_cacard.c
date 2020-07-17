@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include <glib.h>
 #include <libcacard.h>
@@ -502,7 +503,7 @@ void signal_insert(int sig)
     }
 }
 
-int main(int argc, char* argv[])
+int virt_cacard(void)
 {
     VReader *r = NULL;
     VCardEmulError ret;
@@ -579,6 +580,81 @@ int main(int argc, char* argv[])
     g_byte_array_free(socket_to_send, TRUE);
 
     return code;
+}
+
+void display_usage(void)
+{
+    fprintf(stdout,
+        " Usage:\n"
+        "   virt_cacard [-p pid] [-i|-r]\n"
+        "       -m pid      PID of previously started virt_cacard process.\n"
+        "                   If not specified, all virt_cacard processes will be affected\n"
+        "       -r          Remove virtual smart card from virtual slot\n"
+        "       -i          Insert virtual smart card (if it was previously removed)\n"
+        "       -h          This help\n"
+        "\n"
+        "Without arguments, new virtual smart card is created and inserted into virtual reader\n"
+        "\n");
+}
+
+int main(int argc, char* argv[])
+{
+    gboolean insert = FALSE, remove = FALSE;
+    long pid = -1;
+    char c;
+
+    while ((c = getopt(argc, argv, "?hp:ir")) != -1) {
+        switch (c) {
+        case 'p':
+            pid = atol(optarg);
+            break;
+        case 'i':
+            insert = TRUE;
+            break;
+        case 'r':
+            remove = TRUE;
+            break;
+        case 'h':
+        case '?':
+            display_usage();
+            return 0;
+        default:
+            break;
+        }
+    }
+
+    if (remove || insert) {
+        char cmd[255];
+        char *sig = NULL;
+        int r = 0;
+
+        /* Ignore the signals in this process to avoid confusion */
+        signal(SIGUSR1, SIG_IGN);
+        signal(SIGUSR2, SIG_IGN);
+
+        if (remove) {
+            sig = "USR1";
+        } else { /* insert */
+            sig = "USR2";
+        }
+        if (pid == -1) {
+            r = snprintf(cmd, sizeof(cmd), "pkill -%s virt_cacard", sig);
+        } else {
+            r = snprintf(cmd, sizeof(cmd), "kill -s %s %li", sig, pid);
+        }
+        if (r >= sizeof(cmd)) {
+            return -1;
+        }
+        g_debug("About to execute `%s`", cmd);
+        r = system(cmd);
+        if (r != 0) {
+            fprintf(stderr, "Subcommand failed with exit code %d\n", r);
+        }
+        return r;
+    }
+
+    /* If no specific action was given, start virt_cacard now */
+    return virt_cacard();
 }
 
 /* vim: set ts=4 sw=4 tw=0 noet expandtab: */
