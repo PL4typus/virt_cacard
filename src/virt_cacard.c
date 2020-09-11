@@ -589,7 +589,7 @@ void display_usage(void)
     fprintf(stdout,
         " Usage:\n"
         "   virt_cacard [-p pid] [-i|-r]\n"
-        "       -m pid      PID of previously started virt_cacard process.\n"
+        "       -p pid      PID of previously started virt_cacard process.\n"
         "                   If not specified, all virt_cacard processes will be affected\n"
         "       -r          Remove virtual smart card from virtual slot\n"
         "       -i          Insert virtual smart card (if it was previously removed)\n"
