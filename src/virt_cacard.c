@@ -209,12 +209,14 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
 
     g_return_val_if_fail(socket_to_send->len != 0, FALSE);
     g_return_val_if_fail(condition & G_IO_OUT, FALSE);
-    if (condition & G_IO_HUP)
-        g_error ("Write end of pipe died!\n");
+    if (condition & G_IO_HUP) {
+        g_debug("Write end of pipe died!\n");
+        return FALSE
+    }
 
     g_io_channel_write_chars(channel_socket, (gchar *)socket_to_send->data, socket_to_send->len, &bw, &error);
     if (error != NULL) {
-        g_error("Error while sending socket %s", error->message);
+        g_debug("Error while sending socket %s", error->message);
         return FALSE;
     }
     g_byte_array_remove_range(socket_to_send, 0, bw);
@@ -387,12 +389,12 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     static gboolean poweredOff = FALSE;
 
     if (condition & G_IO_HUP) {
-        g_error ("Write end of pipe died!\n");
+        g_debug("Write end of pipe died!\n");
         return FALSE;
     }
     g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error);
     if (error != NULL){
-        g_error("error while reading: %s", error->message);
+        g_debug("error while reading: %s", error->message);
         free(buffer);
         return FALSE;
     }
@@ -450,7 +452,7 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     }
     g_io_channel_flush(channel_socket, &error);
     if(error != NULL){
-        g_error("Error while flushing: %s", error->message);
+        g_debug("Error while flushing: %s", error->message);
     }
     free(buffer);
     return isOk;
