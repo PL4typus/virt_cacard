@@ -211,7 +211,7 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
     g_return_val_if_fail(condition & G_IO_OUT, FALSE);
     if (condition & G_IO_HUP) {
         g_debug("Write end of pipe died!\n");
-        return FALSE
+        return FALSE;
     }
 
     g_io_channel_write_chars(channel_socket, (gchar *)socket_to_send->data, socket_to_send->len, &bw, &error);
