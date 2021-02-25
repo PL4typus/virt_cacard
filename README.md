@@ -55,7 +55,7 @@ After that, you should be able to access virtual smart card through OpenSC:
 If you use Fedora or RHEL, make sure to configure p11-kit to not load OpenSC
 for `virt_cacard`:
 
-   # echo "disable-in: virt_cacard" >> /usr/share/p11-kit/modules/opensc.module
+    # echo "disable-in: virt_cacard" >> /usr/share/p11-kit/modules/opensc.module
 
 otherwise the above command will hang (recursive access to pcscd).
 
