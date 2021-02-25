@@ -1,7 +1,8 @@
 EXTRA_DIST = setup-softhsm2.sh 
 
 AM_CFLAGS = -Wall 
-AM_CFLAGS += $(GLIB_CFLAGS)
+AM_CFLAGS += $(GLIB_CFLAGS)		\
+	-DG_LOG_DOMAIN=\"virt_cacard\"
 AM_CFLAGS += $(CACARD_CFLAGS) 
 
 noinst_PROGRAMS = virt_cacard
