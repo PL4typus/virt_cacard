@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include <glib.h>
 #include <libcacard.h>
@@ -44,17 +45,24 @@ static GThread *thread;
 static guint nreaders;
 static GMutex mutex;
 static GCond cond;
+static GCond insert_cond;
+static SOCKET sock;
 static GIOChannel *channel_socket;
 static GByteArray *socket_to_send;
 static CompatGMutex socket_to_send_lock;
 
-static guint socket_tag_read, socket_tag_send ;
+static guint socket_tag_read;
 
-/** 
- **  the reader name is automatically detected 
+static GMutex insert_mutex;
+static gboolean inserted = FALSE;
+static gboolean action_insert = FALSE, action_remove = FALSE;
+
+/**
+ **  the reader name is automatically detected
  **/
-static const char* reader_name; 
+static const char* reader_name;
 static const char hostname[] = "127.0.0.1";
+static uint16_t port = VPCDPORT;
 
 static gpointer events_thread(gpointer data)
 {
@@ -74,7 +82,7 @@ static gpointer events_thread(gpointer data)
             break;
         }
         reader_id = vreader_get_id(event->reader);
-        if (reader_id == VSCARD_UNDEFINED_READER_ID) 
+        if (reader_id == VSCARD_UNDEFINED_READER_ID)
         {
             g_mutex_lock(&mutex);
             vreader_set_id(event->reader, nreaders++);
@@ -82,10 +90,10 @@ static gpointer events_thread(gpointer data)
             g_mutex_unlock(&mutex);
             reader_id = vreader_get_id(event->reader);
         }
-        switch (event->type) 
+        switch (event->type)
         {
             case VEVENT_READER_INSERT:
-                printf("REMOVE card \tReader name: %s\n", vreader_get_name(event->reader));
+                printf("INSERT card \tReader name: %s\n", vreader_get_name(event->reader));
                 break;
             case VEVENT_READER_REMOVE:
                 printf("REMOVE reader\n\n\n\n");
@@ -122,7 +130,7 @@ static gboolean set_reader_name(void){
         rlentry = vreader_list_get_first(relist);
         while(rlentry != NULL){
             r = vreader_list_get_reader(rlentry);
-            if(vreader_card_is_present(r) != VREADER_NO_CARD){ 
+            if(vreader_card_is_present(r) != VREADER_NO_CARD){
                 reader_name = vreader_get_name(r);
                 isSetname = (reader_name!=NULL) ? TRUE : FALSE;
                 break;
@@ -158,7 +166,7 @@ static VCardEmulError init_cacard(void)
     }
     else{
         printf("Init ok with options \"%s\"\n", args);
-        if(set_reader_name()) 
+        if(set_reader_name())
             r = vreader_get_reader_by_name(reader_name);
 
         if(r == NULL){
@@ -169,6 +177,11 @@ static VCardEmulError init_cacard(void)
             g_mutex_lock(&mutex);
             while (nreaders <= 1)
                 g_cond_wait(&cond, &mutex);
+            g_mutex_unlock(&mutex);
+
+            g_mutex_lock(&insert_mutex);
+            inserted = TRUE;
+            g_mutex_unlock(&insert_mutex);
         }
     }
     g_free(args);
@@ -196,12 +209,14 @@ static gboolean do_socket_send(GIOChannel *source, GIOCondition condition, gpoin
 
     g_return_val_if_fail(socket_to_send->len != 0, FALSE);
     g_return_val_if_fail(condition & G_IO_OUT, FALSE);
-    if (condition & G_IO_HUP)
-        g_error ("Write end of pipe died!\n");
+    if (condition & G_IO_HUP) {
+        g_debug("Write end of pipe died!\n");
+        return FALSE;
+    }
 
     g_io_channel_write_chars(channel_socket, (gchar *)socket_to_send->data, socket_to_send->len, &bw, &error);
     if (error != NULL) {
-        g_error("Error while sending socket %s", error->message);
+        g_debug("Error while sending socket %s", error->message);
         return FALSE;
     }
     g_byte_array_remove_range(socket_to_send, 0, bw);
@@ -261,30 +276,32 @@ gboolean make_reply_poweron(void){
     return TRUE;
 }
 /**
- * Responds to apdu. Format the reponse made by libcacard according to 
+ * Responds to apdu. Format the reponse made by libcacard according to
  * vpcd's protocol
  **/
-gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
+gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len)
+{
     int receive_buf_len = APDUBufSize;
     uint8_t part1, part2, receive_buff[APDUBufSize];
-    VReaderStatus status; 
-    /* get by name ref */  
+    VReaderStatus status;
+
+    /* get by name ref */
     VReader *r = vreader_get_reader_by_name(reader_name);
     g_mutex_lock(&socket_to_send_lock);
 
     g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
-    if (r != NULL){
-        status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
-    }else{
+    if (r == NULL) {
         printf("Error getting reader\n");
         return FALSE;
     }
-    if(status != VREADER_OK){
+    status = vreader_xfr_bytes(r, buffer, send_buff_len, receive_buff, &receive_buf_len);
+    if (status == VREADER_OK) {
+        //print_apdu(receive_buff, receive_buf_len);
+    } else {
+        /* We need to reply anyway */
         printf("xfr apdu failed\n");
-        vreader_free(r); 
-        return FALSE;
+        receive_buf_len = 0;
     }
-//    print_apdu(receive_buff, receive_buf_len);
     //Format reply with the first two bytes for length and then the data:
     convert_byte_hex(&receive_buf_len, &part1, &part2, HEX2BYTES);
     g_byte_array_append(socket_to_send,&part1, 1);
@@ -302,7 +319,7 @@ gboolean make_reply_apdu(uint8_t *buffer, int send_buff_len){
  **/
 gboolean make_reply_atr(void){
     g_mutex_lock(&socket_to_send_lock);
-    uint8_t *atr;
+    uint8_t *atr = NULL;
     uint8_t *reply;
     gboolean isSent = FALSE;
     VReader *r = vreader_get_reader_by_name(reader_name);
@@ -311,18 +328,26 @@ gboolean make_reply_atr(void){
         g_mutex_unlock(&socket_to_send_lock);
         return isSent;
     }
+
     int atr_length = MAX_ATR_LEN;
-    atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
-    
-    vcard_emul_get_atr(NULL, atr, &atr_length);
-    reply = calloc(atr_length+2,sizeof(uint8_t));
-    //Format reply with the first two bytes for length and then the data:
-    convert_byte_hex(&atr_length, &reply[0], &reply[1],HEX2BYTES);
-    for(int i = 0; i < atr_length; i++){
-        reply[i+2] = atr[i];
+    if (vreader_card_is_present(r) == VREADER_OK) {
+        atr = calloc(MAX_ATR_LEN,sizeof(uint8_t));
+        vcard_emul_get_atr(NULL, atr, &atr_length);
+    } else {
+        /* Card was removed -- we can not return ATR now :)
+         * just send empty ATR ? */
+        atr_length = 0;
     }
-    g_byte_array_remove_range(socket_to_send,0,socket_to_send->len);
-    g_byte_array_append(socket_to_send, reply, atr_length+2);
+    reply = calloc(atr_length + 2, sizeof(uint8_t));
+
+    //Format reply with the first two bytes for length and then the data:
+    convert_byte_hex(&atr_length, &reply[0], &reply[1], HEX2BYTES);
+
+    for (int i = 0; i < atr_length; i++) {
+        reply[i + 2] = atr[i];
+    }
+    g_byte_array_remove_range(socket_to_send, 0, socket_to_send->len);
+    g_byte_array_append(socket_to_send, reply, atr_length + 2);
     isSent = do_socket_send(channel_socket, G_IO_OUT, NULL);
     g_mutex_unlock(&socket_to_send_lock);
     free(atr);
@@ -332,9 +357,9 @@ gboolean make_reply_atr(void){
 }
 
 
-/** vpcd communicates over a socked with vpicc usually on port 0x8C7B 
- *  (configurably via /etc/reader.conf.d/vpcd). 
- *  So you can connect virtually any program to the virtual smart card reader, 
+/** vpcd communicates over a socked with vpicc usually on port 0x8C7B
+ *  (configurably via /etc/reader.conf.d/vpcd).
+ *  So you can connect virtually any program to the virtual smart card reader,
  *  as long as you respect the following protocol:
  _____________________________________________________________
  |    vpcd                      |     vpicc                    |
@@ -349,6 +374,8 @@ gboolean make_reply_atr(void){
 
  *  The communication is initiated by vpcd. First the length of the data (in network byte order,
  *  i.e. big endian) is sent followed by the data itself.
+ *
+ *  http://frankmorgner.github.io/vsmartcard/virtualsmartcard/api.html
  **/
 
 static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpointer data)
@@ -361,11 +388,13 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     gboolean isOk = TRUE;
     static gboolean poweredOff = FALSE;
 
-    if (condition & G_IO_HUP)
-        g_error ("Write end of pipe died!\n");
-    g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error); 
+    if (condition & G_IO_HUP) {
+        g_debug("Write end of pipe died!\n");
+        return FALSE;
+    }
+    g_io_channel_read_chars(source,(gchar *) buffer, toRead, &wasRead, &error);
     if (error != NULL){
-        g_error("error while reading: %s", error->message);
+        g_debug("error while reading: %s", error->message);
         free(buffer);
         return FALSE;
     }
@@ -423,20 +452,64 @@ static gboolean do_socket_read(GIOChannel *source, GIOCondition condition, gpoin
     }
     g_io_channel_flush(channel_socket, &error);
     if(error != NULL){
-        g_error("Error while flushing: %s", error->message);
+        g_debug("Error while flushing: %s", error->message);
     }
     free(buffer);
     return isOk;
 }
 
+void connect_vcpd(void)
+{
+    sock = connectsock(hostname,port);
 
-int main(int argc, char* argv[])
+    if (sock == -1){
+        g_error("Error creating read watch\n");
+    }
+
+    channel_socket = g_io_channel_unix_new(sock);
+    g_io_channel_set_encoding(channel_socket, NULL, NULL);
+    g_io_channel_set_buffered(channel_socket, FALSE);
+
+    /* Adding watches to the channel.*/
+    socket_tag_read = g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL);
+    if (!socket_tag_read)
+        g_error("Error creating read watch\n");
+}
+
+void disconnect_vpcd() {
+    g_io_channel_shutdown(channel_socket, TRUE, NULL);
+    g_io_channel_unref(channel_socket);
+    closesocket(sock);
+    sock = -1;
+}
+
+void signal_remove(int sig)
+{
+    /* Can not use locks in signal handler so just hope */
+    if (inserted) {
+        g_debug("%s: Received removal event.", __func__);
+        action_remove = TRUE;
+        /* terminate main loop -- card was physically disconnected.
+         * This can happen anytime without synchronization needed */
+        g_main_loop_quit(loop);
+    }
+}
+
+void signal_insert(int sig)
+{
+    /* Can not use locks in signal handler so just hope */
+    if (!inserted) {
+        g_debug("%s: Received insert event.", __func__);
+        action_insert = TRUE;
+        g_cond_signal(&insert_cond);
+    }
+}
+
+int virt_cacard(void)
 {
     VReader *r = NULL;
     VCardEmulError ret;
     int code = 0;
-    SOCKET sock;
-    uint16_t port = VPCDPORT;
     socket_to_send = g_byte_array_new();
 
     loop = g_main_loop_new(NULL, TRUE);
@@ -452,35 +525,49 @@ int main(int argc, char* argv[])
      **************** CONNECTION TO VPCD *******************
      **/
     /* Connecting to VPCD and creating an IO channel to manage the socket */
-    sock = connectsock(hostname,port);
-    
-    if(sock == -1){
-        printf("Connect sock error\n");
-        return EXIT_FAILURE;
+    connect_vcpd();
+
+    /* Handle insert/removal signals */
+    signal(SIGUSR1, signal_remove);
+    signal(SIGUSR2, signal_insert);
+
+    while (1) {
+        g_main_loop_run(loop); //explicit
+
+        /* We dropped out of the main loop.
+         * This means the card was disconnected so cleanup sockets and
+         * prepare for connecting the card again */
+        g_debug("%s: Handling removal event. Removing card.", __func__);
+        r = vreader_get_reader_by_name(reader_name);
+        vcard_emul_force_card_remove(r);
+        inserted = FALSE;
+
+        /* If the card is removed, we will get disconnected from vpcd */
+        disconnect_vpcd();
+
+        /* Wait for signal announcing card insertion */
+        g_mutex_lock(&insert_mutex);
+        while (!action_insert)
+            g_cond_wait(&insert_cond, &insert_mutex);
+        g_mutex_unlock(&insert_mutex);
+
+        inserted = TRUE;
+        action_insert = FALSE;
+        g_debug("%s: Handling insert event. Inserting card.", __func__);
+        vcard_emul_force_card_insert(r);
+        vreader_free(r);
+
+        /* Now, reconnect to VPCD and fall back to the main loop */
+        connect_vcpd();
     }
-
-    channel_socket = g_io_channel_unix_new(sock);
-    g_io_channel_set_encoding(channel_socket, NULL, NULL);
-    g_io_channel_set_buffered(channel_socket, FALSE);
-
-    /* Adding watches to the channel.*/
-    socket_tag_read = g_io_add_watch(channel_socket, G_IO_IN | G_IO_HUP, do_socket_read, NULL);
-    if(!socket_tag_read)
-        g_error("Error creating read watch\n");
-
-    socket_tag_send = g_io_add_watch(channel_socket, G_IO_OUT | G_IO_HUP, do_socket_send, NULL);
-    if(!socket_tag_send) 
-        g_error("Error creating send watch\n");
-
-    g_main_loop_run(loop); //explicit
 
     /**
      **************** CLEAN UP  ******************
      **/
     printf("*******\tCleaning up\t*******\n\n");
-    r = vreader_get_reader_by_name(reader_name);
 
     /* This probably supposed to be a event that terminates the loop */
+    r = vreader_get_reader_by_name(reader_name);
     vevent_queue_vevent(vevent_new(VEVENT_LAST, r, NULL));
 
     /* join */
@@ -490,13 +577,86 @@ int main(int argc, char* argv[])
     if (r) /*if /remove didn't run */
         vreader_free(r);
 
-    g_io_channel_shutdown(channel_socket, TRUE, NULL);
-    g_io_channel_unref(channel_socket);
-    closesocket(sock);
+    disconnect_vpcd();
     g_main_loop_unref(loop);
     g_byte_array_free(socket_to_send, TRUE);
 
     return code;
+}
+
+void display_usage(void)
+{
+    fprintf(stdout,
+        " Usage:\n"
+        "   virt_cacard [-p pid] [-i|-r]\n"
+        "       -p pid      PID of previously started virt_cacard process.\n"
+        "                   If not specified, all virt_cacard processes will be affected\n"
+        "       -r          Remove virtual smart card from virtual slot\n"
+        "       -i          Insert virtual smart card (if it was previously removed)\n"
+        "       -h          This help\n"
+        "\n"
+        "Without arguments, new virtual smart card is created and inserted into virtual reader\n"
+        "\n");
+}
+
+int main(int argc, char* argv[])
+{
+    gboolean insert = FALSE, remove = FALSE;
+    long pid = -1;
+    char c;
+
+    while ((c = getopt(argc, argv, "?hp:ir")) != -1) {
+        switch (c) {
+        case 'p':
+            pid = atol(optarg);
+            break;
+        case 'i':
+            insert = TRUE;
+            break;
+        case 'r':
+            remove = TRUE;
+            break;
+        case 'h':
+        case '?':
+            display_usage();
+            return 0;
+        default:
+            break;
+        }
+    }
+
+    if (remove || insert) {
+        char cmd[255];
+        char *sig = NULL;
+        int r = 0;
+
+        /* Ignore the signals in this process to avoid confusion */
+        signal(SIGUSR1, SIG_IGN);
+        signal(SIGUSR2, SIG_IGN);
+
+        if (remove) {
+            sig = "USR1";
+        } else { /* insert */
+            sig = "USR2";
+        }
+        if (pid == -1) {
+            r = snprintf(cmd, sizeof(cmd), "pkill -%s virt_cacard", sig);
+        } else {
+            r = snprintf(cmd, sizeof(cmd), "kill -s %s %li", sig, pid);
+        }
+        if (r >= sizeof(cmd)) {
+            return -1;
+        }
+        g_debug("About to execute `%s`", cmd);
+        r = system(cmd);
+        if (r != 0) {
+            fprintf(stderr, "Subcommand failed with exit code %d\n", r);
+        }
+        return r;
+    }
+
+    /* If no specific action was given, start virt_cacard now */
+    return virt_cacard();
 }
 
 /* vim: set ts=4 sw=4 tw=0 noet expandtab: */
